@@ -2,6 +2,9 @@ import cv2 as cv
 import numpy as np
 from icecream import ic
 import os
+import torch
+import torch.nn as nn
+from torchvision import models, transforms
 
 
 ### This code is based on this GitHub: https://github.com/MrBam44/YOLO-object-detection-using-Opencv-with-Python/tree/main
@@ -24,9 +27,27 @@ class yolov3:
         with open("class.names", 'r') as f:
             self.classes = [line.strip() for line in f.readlines()]
         # print(classes)
-        self.layer_name = self.net.getLayerNames()
-        self.output_layer = [self.layer_name[i - 1] for i in self.net.getUnconnectedOutLayers()]
+        self.layer_name = ic(self.net.getLayerNames())
+
+
+
+        # Slice the layers until the last convolution (conv105)
+        layers_until_conv105 = ic(self.layer_name[:(len(self.layer_name)-2)])
+        layers_after_conv105 = ic(self.layer_name[(len(self.layer_name)-2):])
+
+        
+        
+        # 3 output layers ['yolo_82', 'yolo_94', 'yolo_106']
+        self.output_layers = ic([self.layer_name[i - 1] for i in self.net.getUnconnectedOutLayers()])
+
         self.colors = np.random.uniform(0, 255, size=(len(self.classes), 3))
+
+        self.gradients = None
+
+
+
+    def activations_hook(self, grad):
+        self.gradients = grad
 
 
 
@@ -40,9 +61,33 @@ class yolov3:
         # Detect Objects
         blob = cv.dnn.blobFromImage(
             img, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+        
         self.net.setInput(blob)
-        outs = self.net.forward(self.output_layer)
-        # print(outs)
+
+
+
+
+        # Outs is touple of 3 elements corresponding to the 3 heads of the YOLO network and then an array of size (..., 85)
+        outs = self.net.forward(self.output_layers)
+        # ic(outs[0].shape)
+
+
+        last_conv_layer_name = ic(self.layer_name[-3])
+        last_conv_layer = self.net.getLayer(last_conv_layer_name)
+
+
+        out_conv = ic(self.net.forward(last_conv_layer_name).shape)
+
+        # Register hook to the last conv layer
+        hook = last_conv_layer.registerBackwardHook(self.activations_hook)
+
+
+
+
+        # Forward pass
+       
+
+
 
         # Showing Information on the screen
         class_ids = []
@@ -94,11 +139,8 @@ class yolov3:
 
 if __name__ == '__main__':
     # This code won't run if this file is imported.
-    image_path = "../../data/images/cat_and_dog.jpg"
+    image_path = "../../data/images/cat_dog.jpg"
 
-    yolov3 = yolov3()
-    yolov3.forward(image_path)
-
-    
-        
-        
+    model = yolov3()
+    ic(model.output_layers)
+    model.forward(image_path)
