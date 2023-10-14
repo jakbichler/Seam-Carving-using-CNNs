@@ -11,7 +11,7 @@ import cv2
 import argparse
 from PIL import Image
 from models.vgg19.vgg import CustomVGG
-from utils import overlay_heatmap
+from utils import overlay_heatmap, modify_features
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--image_path', type=str, help='Path to the input image')
@@ -22,25 +22,38 @@ class_id = args.class_id
 
 
     
+if __name__ == '__main__':
 
-if __name__=='__main__':
-
+    # Initialize the CustomVGG model
     model = CustomVGG()
     model.eval()
 
+    # Load an image
     img = Image.open(image_path)
+
+    # save the shape of the image
+    orig_img_shape = img.size
+
+
+    # Transform and preprocess the image
     img = torch.FloatTensor(model.transform(img).unsqueeze(0))
 
-
+    # Generate the Grad-CAM heatmap
     heatmap = model.grad_cam_heatmap(class_id, img)
-    plt.matshow(heatmap.squeeze())
-    plt.show()
+
+    # # Display the heatmap using matplotlib
+    # plt.matshow(heatmap.squeeze())
+    # plt.show()
 
 
-    overlayed_image = overlay_heatmap(heatmap, image_path)
-    overlayed_image = cv2.convertScaleAbs(overlayed_image)
-    # Display the image using matplotlib
-    plt.imshow(cv2.cvtColor(overlayed_image, cv2.COLOR_BGR2RGB))
-    plt.show()
+    # # Overlay the heatmap on the original image
+    # overlayed_image = overlay_heatmap(heatmap, image_path)
 
+    # # Convert the overlayed image to the appropriate depth
+    # overlayed_image = cv2.convertScaleAbs(overlayed_image)
+    
+    # # Display the overlayed image using matplotlib
+    # plt.imshow(cv2.cvtColor(overlayed_image, cv2.COLOR_BGR2RGB))
+    # plt.show()
 
+    inpainted_heatmap = modify_features(img, heatmap.squeeze(), image_path, orig_img_shape)
