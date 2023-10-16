@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils import data
 from torchvision.models import vgg19
 from torchvision import transforms
@@ -11,7 +12,7 @@ import cv2
 import argparse
 from PIL import Image
 from models.vgg19.vgg import CustomVGG
-from utils import overlay_heatmap, modify_features
+from utils import overlay_heatmap, modify_features, get_seam, highlight_seam_heatmap, highlight_seam_image
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--image_path', type=str, help='Path to the input image')
@@ -29,31 +30,58 @@ if __name__ == '__main__':
     model.eval()
 
     # Load an image
-    img = Image.open(image_path)
+    orig_image = Image.open(image_path)
+    orig_img_cv2 = cv2.imread(image_path)
+
+    ic(orig_image.size)
 
     # save the shape of the image
-    orig_img_shape = img.size
-
+    orig_img_shape = orig_image.size
 
     # Transform and preprocess the image
-    img = torch.FloatTensor(model.transform(img).unsqueeze(0))
+    img = torch.FloatTensor(model.transform(orig_image).unsqueeze(0))
 
     # Generate the Grad-CAM heatmap
     heatmap = model.grad_cam_heatmap(class_id, img)
 
-    # # Display the heatmap using matplotlib
-    # plt.matshow(heatmap.squeeze())
-    # plt.show()
+    # Print number of heatmap entries that are zero
+    ic((heatmap == 0).sum())
 
+    # Resize the heatmap to twice the size for better painitng experience
+    # heatmap = F.interpolate(heatmap.unsqueeze(0).unsqueeze(0), size=(2 * heatmap.shape[0], 2 * heatmap.shape[1]), mode='bilinear', align_corners=False)
 
-    # # Overlay the heatmap on the original image
-    # overlayed_image = overlay_heatmap(heatmap, image_path)
-
-    # # Convert the overlayed image to the appropriate depth
-    # overlayed_image = cv2.convertScaleAbs(overlayed_image)
-    
-    # # Display the overlayed image using matplotlib
-    # plt.imshow(cv2.cvtColor(overlayed_image, cv2.COLOR_BGR2RGB))
-    # plt.show()
-
+    # Modify the feature map by painting on it (value range is 0-1)
     inpainted_heatmap = modify_features(img, heatmap.squeeze(), image_path, orig_img_shape)
+
+    # Resize the heatmap to the original image size
+    inpainted_heatmap = F.interpolate(inpainted_heatmap.unsqueeze(0).unsqueeze(0), size=(orig_img_shape[1], orig_img_shape[0]), mode='bilinear', align_corners=False)
+
+    
+    plt.matshow(inpainted_heatmap.squeeze())
+    plt.title("inpainted_heatmap")
+    plt.show()
+
+
+
+
+    ## Implementation of seam_carving
+    # # Convert the heatmap to a numpy array
+    heatmap_np = inpainted_heatmap.squeeze().detach().cpu().numpy()
+
+    # Calculate the first seam
+    M, backtrack = get_seam(heatmap_np)
+    heatmap_np = np.uint8(255 * heatmap_np)
+
+
+    # display the heatmap with the highlighted seam
+    heatmap_highlighted_seam = highlight_seam_heatmap(heatmap_np, M, backtrack)
+    plt.matshow(heatmap_highlighted_seam)
+    plt.title("highlighted_heatmap")
+    plt.show()
+
+
+    # display the original image with the highlighted seam
+    image_highlighted_seam = highlight_seam_image(orig_img_cv2, M, backtrack)
+    plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(image_highlighted_seam),  cv2.COLOR_BGR2RGB))
+    plt.title("highlighted_image")
+    plt.show()
