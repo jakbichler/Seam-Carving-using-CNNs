@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from tqdm import tqdm
 from torch.utils import data
 from torchvision.models import vgg19
 from torchvision import transforms
@@ -12,7 +13,7 @@ import cv2
 import argparse
 from PIL import Image
 from models.vgg19.vgg import CustomVGG
-from utils import overlay_heatmap, modify_features, get_seam, highlight_seam_heatmap, highlight_seam_image
+from utils import overlay_heatmap, modify_features, get_seam, highlight_seam_heatmap, highlight_seam_image, carve_column
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--image_path', type=str, help='Path to the input image')
@@ -85,3 +86,44 @@ if __name__ == '__main__':
     plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(image_highlighted_seam),  cv2.COLOR_BGR2RGB))
     plt.title("highlighted_image")
     plt.show()
+
+
+
+    # Remove the seam from the image
+    ic (orig_img_cv2.shape)
+    img_seam_rm = orig_img_cv2.copy()
+    ic(type (orig_img_cv2))
+
+    heatmap_seam_removed = heatmap_np.copy()
+
+    # Create a video
+    out = cv2.VideoWriter("video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=5, frameSize=(img_seam_rm.shape[1], img_seam_rm.shape[0]))
+
+
+    # Visualizing the video of seam_carving
+    for i in tqdm(range(100)):
+        img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed)
+
+        img_padded = np.zeros((orig_img_cv2.shape[0], orig_img_cv2.shape[1], 3), dtype=int)
+        img_padded[:,:img_seam_rm.shape[1], :] = img_seam_rm
+        ic(img_padded.shape)
+
+        # Inside the loop where you write images to the video
+        out.write(cv2.convertScaleAbs(img_padded))
+
+        
+    out.release()
+
+
+    # show the seam carved image and the original side by side
+    plt.figure(figsize=(20, 10))
+    plt.subplot(1, 2, 1)
+    plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(orig_img_cv2),  cv2.COLOR_BGR2RGB))
+    plt.title("Original image")
+    plt.subplot(1, 2, 2)
+    plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(img_seam_rm),  cv2.COLOR_BGR2RGB))
+    plt.title("Image with seam removed")
+
+    plt.show()
+
+    ic(img_seam_rm.shape)
