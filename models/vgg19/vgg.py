@@ -82,12 +82,13 @@ class CustomVGG(nn.Module):
 
         # pull the gradients out of the model
         gradients = self.get_activations_gradient()
-
+        ic(gradients.shape)
         # pool the gradients across the channels
         pooled_gradients = torch.mean(gradients, dim=[0, 2, 3])
-
+        ic(pooled_gradients.shape)
         # get the activations of the last convolutional layer
         activations = self.get_activations(img).detach()
+        ic(activations.shape)
 
         # weight the channels by corresponding gradients
         for i in range(512):
@@ -95,7 +96,7 @@ class CustomVGG(nn.Module):
             
         # average the channels of the activations
         heatmap = torch.mean(activations, dim=1).squeeze()
-
+        ic(heatmap.shape    )
         # relu on top of the heatmap
         heatmap = np.maximum(heatmap, 0)
 

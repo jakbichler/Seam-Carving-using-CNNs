@@ -97,7 +97,7 @@ if __name__ == '__main__':
     heatmap_seam_removed = heatmap_np.copy()
 
     # Create a video
-    out = cv2.VideoWriter("video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=5, frameSize=(img_seam_rm.shape[1], img_seam_rm.shape[0]))
+    out = cv2.VideoWriter("video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=8, frameSize=(img_seam_rm.shape[1], img_seam_rm.shape[0]))
 
 
     # Visualizing the video of seam_carving

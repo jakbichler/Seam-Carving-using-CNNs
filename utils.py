@@ -42,17 +42,29 @@ def modify_features(image, heatmap, image_path, orig_img_shape):
 
         print(f'Painted at: (x: {ix:.1f}, y: {iy:.1f}, corresponding to heatmap coordinates: (x: {int(ix_heat)}, y: {int(iy_heat)})')
 
-        # Clip heatmap to max 1
-        if heatmap_new[int(iy_heat), int(ix_heat)] < 0.8:
-            heatmap_new[int(iy_heat), int(ix_heat)] += 0.2
+        # Left click to increase
+        if event.button == 1:
+            if heatmap_new[int(iy_heat), int(ix_heat)] < 0.8:
+                heatmap_new[int(iy_heat), int(ix_heat)] += 0.2
 
-        else:
-            heatmap_new[int(iy_heat), int(ix_heat)] = 1
+            else:
+                heatmap_new[int(iy_heat), int(ix_heat)] = 1
+
+        # Right click to decrease
+        if event.button == 3:
+            if heatmap_new[int(iy_heat), int(ix_heat)] > 0.2:
+                heatmap_new[int(iy_heat), int(ix_heat)] -= 0.2
+
+            else:
+                heatmap_new[int(iy_heat), int(ix_heat)] = 0
+
 
 
         # Update the displayed image with the modified heatmap
         imshow.set_data(cv2.cvtColor(cv2.convertScaleAbs(overlay_heatmap(heatmap_new, image_path)),  cv2.COLOR_BGR2RGB))
         fig.canvas.draw()
+
+        
 
     fig = plt.figure("Impaint featuremap")
     ax = fig.add_subplot(111)
