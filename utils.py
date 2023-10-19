@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
 from icecream import ic
+from tqdm import tqdm
 from numba import jit
 
 
@@ -27,8 +28,6 @@ def modify_features(image, heatmap, image_path, orig_img_shape):
     plt_image = image[0].permute(1, 2, 0).detach().cpu().numpy() / 2 + 0.5
     coords = []
     heatmap_new = heatmap.clone()
-
-    # heatmap_new = F.interpolate(heatmap_new.unsqueeze(0).unsqueeze(0), size=orig_img_shape, mode='bilinear', align_corners=False)
 
 
     def onclick(event):
@@ -108,10 +107,8 @@ def get_seam(heatmap):
 
 
 # Inspired by https://karthikkaranth.me/blog/implementing-seam-carving-with-python/
-def carve_column(img, heatmap):
+def carve_column(img, heatmap, M, backtrack):
     r, c, _ = img.shape
-
-    M, backtrack = get_seam(heatmap)
 
     # Create a (r, c) matrix filled with the value True
     # We'll be removing all pixels from the image which
@@ -178,8 +175,39 @@ def highlight_seam_image(img, M, backtrack):
 
     # Highlight the seam in red, the image ix width, height, 3 channels. red to 255
 
-        highlighted_image[mask == True, 0] = 0
-        highlighted_image[mask == True, 1] = 165
-        highlighted_image[mask == True, 2] = 200
+        highlighted_image[mask == True, 0] = 200
+        highlighted_image[mask == True, 1] = 0
+        highlighted_image[mask == True, 2] = 0
 
     return highlighted_image
+
+
+
+def vectorize_with_triangles(image):
+    # Create a blank canvas to draw the triangles
+    canvas = np.zeros_like(image)
+    
+    # Define the triangle-drawing function using OpenCV
+    def draw_triangle(img, pts, color):
+        triangle_cnt = np.array(pts).reshape((-1,1,2))
+        cv2.drawContours(img, [triangle_cnt], 0, color, -1)
+
+    # Iterate through the image pixels in a 2x2 block manner
+    for i in tqdm(range(0, image.shape[1]-1, 2)):
+        for j in range(0, image.shape[0]-1, 2):
+            # Centers of the 4 pixels in the block
+            centers = [(i, j), (i, j+1), (i+1, j), (i+1, j+1)]
+            
+            # Define the two triangles using the centers
+            triangle1 = [centers[0], centers[1], centers[2]]
+            triangle2 = [centers[1], centers[2], centers[3]]
+
+            # Get average color for each triangle from the image
+            color1 = np.mean([image[y,x] for x,y in triangle1], axis=0)
+            color2 = np.mean([image[y,x] for x,y in triangle2], axis=0)
+
+            # Draw the triangles onto the canvas
+            draw_triangle(canvas, triangle1, color1)
+            draw_triangle(canvas, triangle2, color2)
+            
+    return canvas
