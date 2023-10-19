@@ -12,13 +12,6 @@ import argparse
 from PIL import Image
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--image_path', type=str, help='Path to the input image')
-parser.add_argument('--class_id', type=int, help='Class to perform Grad-CAM with')
-args = parser.parse_args()
-image_path = args.image_path
-class_id = args.class_id
-
 
 # use the ImageNet transformation
 transform = transforms.Compose([transforms.Resize((224, 224)), 
@@ -50,6 +43,8 @@ class CustomVGG(nn.Module):
         
         # placeholder for the gradients
         self.gradients = None
+
+        
 
    
 

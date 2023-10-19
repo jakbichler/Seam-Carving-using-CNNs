@@ -183,6 +183,35 @@ def highlight_seam_image(img, M, backtrack):
 
 
 
+
+def highlight_all_seams(img, all_M, all_backtrack):
+    highlighted_image = img.copy()
+
+    r, c, _ = img.shape
+    mask = np.zeros((r, c), dtype=bool)
+
+
+    # Iterate through the stored seams in reverse order (from last removed to first)
+    for i in tqdm(range(len(all_M))):
+        M = all_M[i]
+        backtrack = all_backtrack[i]
+
+        # Find the starting point with the lowest energy in the last row
+        j = np.argmin(M[-1])
+        for i in range(r - 1, -1, -1):
+            mask[i, j] = True
+            j = backtrack[i, j]
+
+        # Highlight the seam in red, the image ix width, height, 3 channels. red to 255
+
+            highlighted_image[mask == True, 0] = 200
+            highlighted_image[mask == True, 1] = 0
+            highlighted_image[mask == True, 2] = 0
+
+    return highlighted_image
+
+
+
 def vectorize_with_triangles(image):
     # Create a blank canvas to draw the triangles
     canvas = np.zeros_like(image)
@@ -211,3 +240,42 @@ def vectorize_with_triangles(image):
             draw_triangle(canvas, triangle2, color2)
             
     return canvas
+
+
+# def uncarve_image(vectorized_image, removed_seams):
+#     # Start with the vectorized image and expand by adding the seams back
+#     expanded_image = vectorized_image.copy()
+
+#     # num_rows = ic(len(removed_seams))
+#     # num_columns = ic([len(sub_list) for sub_list in removed_seams])
+
+
+
+#     # Iterate through the stored seams in reverse order (from last removed to first)
+#     for seam in reversed(removed_seams):
+
+#         # ic(seam)
+
+#         new_column = np.zeros((vectorized_image.shape[0], 1, 3), dtype=vectorized_image.dtype)
+#         h, w, _ = expanded_image.shape
+
+#         # Iterate through the image rows to insert the seam
+#         for (row, col) in seam:
+#             if col == 0:
+#                 # If the seam is at the left edge
+#                 new_color = expanded_image[row, col]
+#             elif col == w:
+#                 # If the seam is at the right edge
+#                 new_color = expanded_image[row, col-1]
+#             else:
+#                 # Interpolate colors for the new seam pixel
+#                 left_pixel = expanded_image[row, col-1]
+#                 right_pixel = expanded_image[row, col]
+#                 new_color = (left_pixel + right_pixel) / 2
+
+#             new_column[row, 0, :] = new_color
+
+#         # Insert the new seam column into the image
+#         expanded_image = np.hstack((expanded_image[:, :col], new_column, expanded_image[:, col:]))
+        
+#     return expanded_image

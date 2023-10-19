@@ -15,21 +15,24 @@ from PIL import Image
 from models.vgg19.vgg import CustomVGG
 from utils import *
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--image_path', type=str, help='Path to the input image')
-parser.add_argument('--class_id', type=int, help='Class to perform Grad-CAM with')
-args = parser.parse_args()
-image_path = args.image_path
-class_id = args.class_id
-
 
     
 if __name__ == '__main__':
 
 
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--image_path', type=str, help='Path to the input image')
+    parser.add_argument('--class_id', type=int, help='Class to perform Grad-CAM with')
+    parser.add_argument('--n_seams', type=int, help='Number of seams to remove')
+    parser.add_argument('--create_video', action='store_true', help='Whether to create a video or not')
+    args = parser.parse_args()
 
-    n_seams = 20  # seams to remove
-    create_video = False # whether to create a video or not
+    image_path = args.image_path
+    class_id = args.class_id
+    n_seams = args.n_seams
+    create_video = args.create_video
+
+
 
     # Initialize the CustomVGG model
     model = CustomVGG()
@@ -38,6 +41,9 @@ if __name__ == '__main__':
     # Load an image
     orig_image = Image.open(image_path)
     orig_img_cv2 = cv2.imread(image_path)
+
+
+ 
 
     ic(orig_image.size)
 
@@ -112,7 +118,8 @@ if __name__ == '__main__':
             # Calculate the seam for the current heatmap
             M, backtrack = get_seam(heatmap_seam_removed)
 
-            # Highlight the seam on the image
+
+            # Highlight the current seam on the image
             highlighted_img = highlight_seam_image(img_seam_rm, M, backtrack)
 
             # Write the highlighted image to the video
@@ -127,15 +134,18 @@ if __name__ == '__main__':
 
         # No video, just carving
     else:
+
         for i in tqdm(range(n_seams)):
 
             # Calculate the seam for the current heatmap
             M, backtrack = get_seam(heatmap_seam_removed)
+
             img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
   
 
 
-    # show the seam carved image and the original side by side
+
+    # show the seam carved image, original and all highlighted side by side
     plt.figure(figsize=(20, 10))
     plt.subplot(1, 2, 1)
     plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(orig_img_cv2),  cv2.COLOR_BGR2RGB))
@@ -144,11 +154,14 @@ if __name__ == '__main__':
     plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(img_seam_rm),  cv2.COLOR_BGR2RGB))
     plt.title(f"Image with {n_seams} seams removed")
 
+
     plt.show()
 
+    ic (img_seam_rm.shape)
 
     # Vectorize the image with triangles
     vectorized_img = vectorize_with_triangles(img_seam_rm)
+    ic(vectorized_img.shape)
 
     # show the vectorized image and the seam carved image side by side
     plt.figure(figsize=(20, 10))
@@ -159,3 +172,12 @@ if __name__ == '__main__':
     plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(vectorized_img),  cv2.COLOR_BGR2RGB))
     plt.title("Vectorized Image with Triangles")
     plt.show()
+
+
+
+    # # Uncarve the vectorized image
+    # uncarved_image = uncarve_image(vectorized_img, removed_seams)
+
+    # plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(uncarved_image), cv2.COLOR_BGR2RGB))
+    # plt.title("Uncarved Vectorized Image")
+    # plt.show()
