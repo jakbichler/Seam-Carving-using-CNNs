@@ -14,6 +14,7 @@ import argparse
 from PIL import Image
 from models.vgg19.vgg import CustomVGG
 from utils import *
+import os
 
 
     
@@ -43,10 +44,6 @@ if __name__ == '__main__':
     orig_img_cv2 = cv2.imread(image_path)
 
 
- 
-
-    ic(orig_image.size)
-
     # save the shape of the image
     orig_img_shape = orig_image.size
 
@@ -56,8 +53,6 @@ if __name__ == '__main__':
     # Generate the Grad-CAM heatmap
     heatmap = model.grad_cam_heatmap(class_id, img)
 
-    # Print number of heatmap entries that are zero
-    ic((heatmap == 0).sum())
 
     # Resize the heatmap to twice the size for better painitng experience
     # heatmap = F.interpolate(heatmap.unsqueeze(0).unsqueeze(0), size=(2 * heatmap.shape[0], 2 * heatmap.shape[1]), mode='bilinear', align_corners=False)
@@ -69,28 +64,26 @@ if __name__ == '__main__':
     inpainted_heatmap = F.interpolate(inpainted_heatmap.unsqueeze(0).unsqueeze(0), size=(orig_img_shape[1], orig_img_shape[0]), mode='bilinear', align_corners=False)
 
     
-    plt.matshow(inpainted_heatmap.squeeze())
-    plt.title("inpainted_heatmap")
+    # Plot the heatmap
+    fig, ax = plt.subplots()  # Create a new figure and axis object
+    cax = ax.matshow(inpainted_heatmap.squeeze())
+    plt.title("Guide for seam_carving")
+
+    # Add a colorbar to the figure to act as a legend
+    cbar = fig.colorbar(cax, ticks=[0, 0.3, 0.6, 0.9], orientation='vertical')
+    cbar.set_label('Value', rotation=270, labelpad=30)
+
     plt.show()
-
-
 
 
     ## Implementation of seam_carving
     # # Convert the heatmap to a numpy array
-    heatmap_np = inpainted_heatmap.squeeze().detach().cpu().numpy()
+    heatmap_np = inpainted_heatmap.squeeze().detach().cpu().numpy() * 255
 
     # Calculate the first seam
     M, backtrack = get_seam(heatmap_np)
-    heatmap_np = np.uint8(255 * heatmap_np)
-
-
-    # # display the heatmap with the highlighted seam
-    # heatmap_highlighted_seam = highlight_seam_heatmap(heatmap_np, M, backtrack)
-    # plt.matshow(heatmap_highlighted_seam)
-    # plt.title("highlighted_heatmap")
-    # plt.show()
-
+    
+    heatmap_np = np.uint8(heatmap_np)
 
     # display the original image with the highlighted seam
     image_highlighted_seam = highlight_seam_image(orig_img_cv2, M, backtrack)
@@ -101,23 +94,25 @@ if __name__ == '__main__':
 
 
     # Remove the seam from the image
-    ic (orig_img_cv2.shape)
     img_seam_rm = orig_img_cv2.copy()
-    ic(type (orig_img_cv2))
-
     heatmap_seam_removed = heatmap_np.copy()
+
+    removed_seams = []
+
+    # Create a tqdm progress bar instance
+    pbar = tqdm(total=n_seams, desc=f"Removing {n_seams} Seams", dynamic_ncols=True, leave=True)
 
 
     if create_video:
         # Create a video
-        out = cv2.VideoWriter("video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=8, frameSize=(img_seam_rm.shape[1], img_seam_rm.shape[0]))
+        out = cv2.VideoWriter("video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=3, frameSize=(img_seam_rm.shape[1], img_seam_rm.shape[0]))
+
 
         # Visualizing the video of seam_carving
-        for i in tqdm(range(n_seams)):
+        for i in range(n_seams):
 
             # Calculate the seam for the current heatmap
             M, backtrack = get_seam(heatmap_seam_removed)
-
 
             # Highlight the current seam on the image
             highlighted_img = highlight_seam_image(img_seam_rm, M, backtrack)
@@ -127,57 +122,46 @@ if __name__ == '__main__':
             img_padded_highlighted[:, :highlighted_img.shape[1], :] = highlighted_img
             out.write(cv2.convertScaleAbs(img_padded_highlighted))
 
-            img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
+            mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
 
-        
+            removed_seams.append(mask_seam)
+
+            # Update tqdm bar
+            pbar.update(1)
+
+
+        # Close the tqdm progress bar
+        pbar.close()
         out.release()
+
+
 
         # No video, just carving
     else:
 
-        for i in tqdm(range(n_seams)):
+        for i in range(n_seams):
 
             # Calculate the seam for the current heatmap
             M, backtrack = get_seam(heatmap_seam_removed)
 
-            img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
+            mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
   
+            removed_seams.append(mask_seam)
+            pbar.update(1)
 
 
-
-    # show the seam carved image, original and all highlighted side by side
-    plt.figure(figsize=(20, 10))
-    plt.subplot(1, 2, 1)
-    plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(orig_img_cv2),  cv2.COLOR_BGR2RGB))
-    plt.title("Original image")
-    plt.subplot(1, 2, 2)
-    plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(img_seam_rm),  cv2.COLOR_BGR2RGB))
-    plt.title(f"Image with {n_seams} seams removed")
+        pbar.close()
 
 
-    plt.show()
-
-    ic (img_seam_rm.shape)
+    # Display the original image and the image with the seam removed
+    display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_seams} seams removed")
 
     # Vectorize the image with triangles
     vectorized_img = vectorize_with_triangles(img_seam_rm)
-    ic(vectorized_img.shape)
-
     # show the vectorized image and the seam carved image side by side
-    plt.figure(figsize=(20, 10))
-    plt.subplot(1, 2, 1)
-    plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(img_seam_rm),  cv2.COLOR_BGR2RGB))
-    plt.title(f"Image with {n_seams} seams removed")
-    plt.subplot(1, 2, 2)
-    plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(vectorized_img),  cv2.COLOR_BGR2RGB))
-    plt.title("Vectorized Image with Triangles")
-    plt.show()
+    display_two_images(img_seam_rm, vectorized_img, f"Image with {n_seams} seams removed", "Vectorized Image with Triangles")
 
-
-
-    # # Uncarve the vectorized image
-    # uncarved_image = uncarve_image(vectorized_img, removed_seams)
-
-    # plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(uncarved_image), cv2.COLOR_BGR2RGB))
-    # plt.title("Uncarved Vectorized Image")
-    # plt.show()
+    # Uncarve the vectorized image
+    uncarved_image = uncarve_using_averages(vectorized_img, removed_seams)
+    # Display the vectorized image and the uncarved image side by side
+    display_two_images(vectorized_img, uncarved_image, "Vectorized Image with Triangles", "Uncarved Image")

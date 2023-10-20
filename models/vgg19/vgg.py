@@ -10,8 +10,9 @@ from icecream import ic
 import cv2
 import argparse
 from PIL import Image
+import warnings
 
-
+warnings.filterwarnings("ignore", category=UserWarning, module="torchvision")
 
 # use the ImageNet transformation
 transform = transforms.Compose([transforms.Resize((224, 224)), 
@@ -22,6 +23,8 @@ transform = transforms.Compose([transforms.Resize((224, 224)),
 
 class CustomVGG(nn.Module):
     def __init__(self):
+
+
         super(CustomVGG, self).__init__()
         
 
@@ -45,9 +48,7 @@ class CustomVGG(nn.Module):
         self.gradients = None
 
         
-
-   
-
+        
     # hook for the gradients of the activations
     def activations_hook(self, grad):
         self.gradients = grad
@@ -63,27 +64,27 @@ class CustomVGG(nn.Module):
         x = x.view((1, -1))
         x = self.classifier(x)
         return x
-    
+
+
 
     def grad_cam_heatmap(self, class_id, img):
 
         # get the most likely prediction of the model
-        pred_all = ic(self.forward(img))
+        pred_all = self.forward(img)
 
-        pred_index = ic(pred_all.argmax(dim=1))
+        pred_index = pred_all.argmax(dim=1)
 
         # get the gradient of the output with respect to the parameters of the model
         pred_all[:, class_id].backward()
 
         # pull the gradients out of the model
         gradients = self.get_activations_gradient()
-        ic(gradients.shape)
+
         # pool the gradients across the channels
         pooled_gradients = torch.mean(gradients, dim=[0, 2, 3])
-        ic(pooled_gradients.shape)
+
         # get the activations of the last convolutional layer
         activations = self.get_activations(img).detach()
-        ic(activations.shape)
 
         # weight the channels by corresponding gradients
         for i in range(512):
