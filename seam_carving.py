@@ -14,6 +14,7 @@ import cv2
 import argparse
 from PIL import Image
 from models.vgg19.vgg import CustomVGG
+from models.midas_depth.model_midas import MidasDepthEstimator
 from utils import *
 import os
 
@@ -27,36 +28,42 @@ if __name__ == '__main__':
     parser.add_argument('--class_id', type=int, help='Class to perform Grad-CAM with')
     parser.add_argument('--n_seams', type=int, help='Number of seams to remove')
     parser.add_argument('--create_video', action='store_true', help='Whether to create a video or not')
+    parser.add_argument('--depth_weight', type=float, help='Weight for the depth estimate', default=0.5)
     args = parser.parse_args()
 
     image_path = args.image_path
     class_id = args.class_id
     n_seams = args.n_seams
     create_video = args.create_video
+    weight_depth = args.depth_weight
 
-
+    os.system('clear')
 
     # Initialize the CustomVGG model
-    model = CustomVGG()
-    model.eval()
+    print("\nInitializing the CustomVGG model...")
+    obect_detector = CustomVGG()
+    obect_detector.eval()
 
-    # Load an image
+
+    # Initialize the MidasDepthEstimator model
+    print("\nInitializing the MidasDepthEstimator model...")
+    depth_estimator = MidasDepthEstimator()
+
+
+    # Load the image
     orig_image = Image.open(image_path)
     orig_img_cv2 = cv2.imread(image_path)
-
-
-    # save the shape of the image
     orig_img_shape = orig_image.size
 
     # Transform and preprocess the image
-    img = torch.FloatTensor(model.transform(orig_image).unsqueeze(0))
+    img = torch.FloatTensor(obect_detector.transform(orig_image).unsqueeze(0))
 
     # Generate the Grad-CAM heatmap
-    heatmap = model.grad_cam_heatmap(class_id, img)
+    heatmap = obect_detector.grad_cam_heatmap(class_id, img)
 
 
     # Resize the heatmap to twice the size for better painitng experience
-    # heatmap = F.interpolate(heatmap.unsqueeze(0).unsqueeze(0), size=(2 * heatmap.shape[0], 2 * heatmap.shape[1]), mode='bilinear', align_corners=False)
+    heatmap = F.interpolate(heatmap.unsqueeze(0).unsqueeze(0), size=(int(1.5 * heatmap.shape[0]), int(1.5 * heatmap.shape[1])), mode='bilinear', align_corners=False)
 
     # Modify the feature map by painting on it (value range is 0-1)
     inpainted_heatmap = modify_features(img, heatmap.squeeze(), image_path, orig_img_shape)
@@ -64,40 +71,67 @@ if __name__ == '__main__':
     # Resize the heatmap to the original image size
     inpainted_heatmap = F.interpolate(inpainted_heatmap.unsqueeze(0).unsqueeze(0), size=(orig_img_shape[1], orig_img_shape[0]), mode='bilinear', align_corners=False)
 
-    
-    # Plot the heatmap
-    fig, ax = plt.subplots()  # Create a new figure and axis object
-    cax = ax.matshow(inpainted_heatmap.squeeze())
-    plt.title("Guide for seam_carving")
-
-    # Add a colorbar to the figure to act as a legend
-    cbar = fig.colorbar(cax, ticks=[0, 0.3, 0.6, 0.9], orientation='vertical')
-    cbar.set_label('Value', rotation=270, labelpad=30)
-
-    plt.show()
 
 
-    ## Implementation of seam_carving
+    ################################################ DEPTH ESTIMATION #############################################################
+
+    # Estimate the depth of the image
+    print("\nEstimating the depth of the image...")
+    depth_estimate = depth_estimator.estimate_depth(image_path)
+
+    ################################################################################################################
+
+
+    ## Creating a combined costmap from the inpainted feature map and the depth estimate
+    # Both the inpainted feature map and the depth estimate are in the range 0-1
+
     # # Convert the heatmap to a numpy array
-    heatmap_np = inpainted_heatmap.squeeze().detach().cpu().numpy() * 255
+    heatmap_inpainted_np = inpainted_heatmap.squeeze().detach().cpu().numpy()
 
-    # Calculate the first seam
-    print("\nCalculating the first seam...\n")
-    M, backtrack = get_seam(heatmap_np)
-    
-    heatmap_np = np.uint8(heatmap_np)
+    # # Normalize the depth estimate to range 0-1
+    depth_estimate = (depth_estimate - depth_estimate.min()) / (depth_estimate.max() - depth_estimate.min()+1e-8)
 
-    # display the original image with the highlighted seam
-    image_highlighted_seam = highlight_seam_image(orig_img_cv2, M, backtrack)
-    plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(image_highlighted_seam),  cv2.COLOR_BGR2RGB))
-    plt.title("Original image with the first seam to be removed highlighted")
+
+    # # Create the combined cost map with weighing factor and scale it to 0-255
+    cost_map = ((1-weight_depth)*heatmap_inpainted_np + weight_depth*depth_estimate)*255
+
+
+
+
+    # # Display the combined cost map next to the depth estimate and the inpainted heatmap
+    # Create main axes: one for left half and one for right half
+    # Create main axes: one for the right half and one for the left half
+    fig = plt.figure(figsize=(20, 10))
+    ax_right = plt.subplot2grid((2, 2), (0, 1), rowspan=2, fig=fig)
+    ax_left_top = plt.subplot2grid((2, 2), (0, 0), fig=fig)
+    ax_left_bottom = plt.subplot2grid((2, 2), (1, 0), fig=fig)
+
+    # Depth Estimate with colorbar in top-left
+    im_depth = ax_left_top.imshow(depth_estimate)
+    ax_left_top.set_title("Depth Estimate")
+    cbar_depth = fig.colorbar(im_depth, ax=ax_left_top, orientation='vertical')
+    cbar_depth.set_label('Inverse Depth Value', rotation=270, labelpad=15)
+
+    # Inpainted Heatmap with colorbar in bottom-left
+    im_heatmap = ax_left_bottom.imshow(inpainted_heatmap.squeeze())
+    ax_left_bottom.set_title("Inpainted GradCam Feature Map")
+    cbar_heatmap = fig.colorbar(im_heatmap, ax=ax_left_bottom, orientation='vertical')
+    cbar_heatmap.set_label('Heatmap Value', rotation=270, labelpad=15)
+
+    # Combined Cost Map with colorbar on the right, spanning two rows
+    im_cost = ax_right.imshow(cost_map)
+    ax_right.set_title(f"Combined Cost Map with depth_weight {weight_depth}")
+    cbar_cost = fig.colorbar(im_cost, ax=ax_right, orientation='vertical', shrink= 0.6)
+    cbar_cost.set_label('Cost Value', rotation=270, labelpad=15)
+
+    plt.tight_layout()
     plt.show()
 
 
 
     # Remove the seam from the image
     img_seam_rm = orig_img_cv2.copy()
-    heatmap_seam_removed = heatmap_np.copy()
+    heatmap_seam_removed = cost_map.copy()
 
     removed_seams = []
 
