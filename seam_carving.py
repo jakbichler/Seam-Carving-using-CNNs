@@ -7,6 +7,7 @@ from torchvision.models import vgg19
 from torchvision import transforms
 from torchvision import datasets
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import numpy as np
 from icecream import ic
 import cv2
@@ -81,6 +82,7 @@ if __name__ == '__main__':
     heatmap_np = inpainted_heatmap.squeeze().detach().cpu().numpy() * 255
 
     # Calculate the first seam
+    print("\nCalculating the first seam...\n")
     M, backtrack = get_seam(heatmap_np)
     
     heatmap_np = np.uint8(heatmap_np)
@@ -157,11 +159,34 @@ if __name__ == '__main__':
     display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_seams} seams removed")
 
     # Vectorize the image with triangles
+    print("\nVectorizing the image with triangles...")
     vectorized_img = vectorize_with_triangles(img_seam_rm)
     # show the vectorized image and the seam carved image side by side
     display_two_images(img_seam_rm, vectorized_img, f"Image with {n_seams} seams removed", "Vectorized Image with Triangles")
 
-    # Uncarve the vectorized image
-    uncarved_image = uncarve_using_averages(vectorized_img, removed_seams)
+    # Uncarve the vectorized image without averaging to show gaps
+    print("\nUncarving the vectorized image...")
+    img_all_seams_highlighted = uncarve(vectorized_img, removed_seams, average=False)
     # Display the vectorized image and the uncarved image side by side
-    display_two_images(vectorized_img, uncarved_image, "Vectorized Image with Triangles", "Uncarved Image")
+    display_two_images(vectorized_img, img_all_seams_highlighted, "Vectorized Image with Triangles", "Uncarved Image")
+
+
+    # # uncarve with averaging to fill gaps
+    # print("\nUncarving the vectorized image with averaging...")
+    # img_all_seams_highlighted_avg = uncarve(vectorized_img, removed_seams, average=True)
+    # # Display the vectorized image and the uncarved image side by side
+    # display_two_images(vectorized_img, img_all_seams_highlighted_avg, "Vectorized Image with Triangles", "Uncarved Image with Averaging")
+
+
+    ###################################Vectorization approach 2###########################
+
+    # vectorized_triangles = vectorize(img_seam_rm)
+    # display_vectorized_image(img_seam_rm, vectorized_triangles)
+    # adjusted_triangles = adjust_triangles_for_uncarve(vectorized_triangles, removed_seams)
+    # display_vectorized_image(img_all_seams_highlighted, adjusted_triangles)
+
+    ########################################################
+
+
+
+    

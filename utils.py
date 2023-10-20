@@ -1,10 +1,10 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt 
-import torch
-import torch.nn.functional as F
+import matplotlib.patches as patches
 from icecream import ic
 from tqdm import tqdm
+import os
 
 
 
@@ -55,6 +55,8 @@ def modify_features(image, heatmap, image_path, orig_img_shape):
     # Global flag for painting
     is_painting = False
 
+
+
     def update_heatmap(event, ix, iy):
         ix_heat = ix / orig_img_shape[0] * heatmap_new.shape[0]
         iy_heat = iy / orig_img_shape[1] * heatmap_new.shape[1]
@@ -96,6 +98,9 @@ def modify_features(image, heatmap, image_path, orig_img_shape):
     fig.canvas.mpl_connect('button_release_event', on_release)
     fig.canvas.mpl_connect('motion_notify_event', on_motion)
 
+    os.system("clear")
+    print ("\nModify the featuremap by painting...\n")
+
     overlayed_inpainted_image = cv2.convertScaleAbs(overlay_heatmap(heatmap_new, image_path))
 
     imshow = ax.imshow(cv2.cvtColor(overlayed_inpainted_image, cv2.COLOR_BGR2RGB))
@@ -110,7 +115,7 @@ def modify_features(image, heatmap, image_path, orig_img_shape):
 def get_seam(heatmap):
     r, c = heatmap.shape
 
-    M = heatmap.copy()
+    M = heatmap.copy().astype(np.uint32)
     backtrack = np.zeros_like(M, dtype=int)
 
     for i in range(1, r):
@@ -218,7 +223,8 @@ def vectorize_with_triangles(image):
         cv2.drawContours(img, [triangle_cnt], 0, color, -1)
 
     # Iterate through the image pixels in a 2x2 block manner
-    for i in tqdm(range(0, image.shape[1]-1, 2)):
+    pbar = tqdm(total=(image.shape[1]-1), desc="Vectorizing Image", dynamic_ncols=True, leave=True)
+    for i in range(0, image.shape[1]-1, 2):
         for j in range(0, image.shape[0]-1, 2):
             # Centers of the 4 pixels in the block
             centers = [(i, j), (i, j+1), (i+1, j), (i+1, j+1)]
@@ -234,15 +240,21 @@ def vectorize_with_triangles(image):
             # Draw the triangles onto the canvas
             draw_triangle(canvas, triangle1, color1)
             draw_triangle(canvas, triangle2, color2)
+
+        pbar.update(2)
+
+    pbar.close()
             
     return canvas
 
 
-# 1. Using Averages
-def uncarve_using_averages(carved_image, masks):
+
+def uncarve(carved_image, masks, average=False):
     img = np.array(carved_image)
 
-    for mask in tqdm(reversed(masks)):
+    pbar = tqdm(total=len(masks), desc="Uncarving Image", dynamic_ncols=True, leave=True)
+    
+    for mask in reversed(masks):
 
         new_img = np.zeros((img.shape[0], img.shape[1] + 1, img.shape[2]), dtype=img.dtype)
         
@@ -256,10 +268,75 @@ def uncarve_using_averages(carved_image, masks):
             # Where mask is 0, leave the new image to zero, fill the new image with old image 
             # left and right of the pixel that was removed
             new_img[row, :pixel_index] = img[row, :pixel_index]
-            new_img[row, pixel_index] = 0  
             new_img[row, pixel_index+1:] = img[row, pixel_index:]
+            
+            if average:
+                # Average the two neighbouring pixels
+                new_img[row, pixel_index] = np.mean(img[row, pixel_index:pixel_index+2], axis=0)
+            else:
+                new_img[row, pixel_index] = 0  
 
-        
 
+    
+        pbar.update(1)
         img = new_img
+
+    pbar.close()
+
     return img
+
+def vectorize(image):
+    height, width = image.shape[:2]
+
+    # Create triangles
+    triangles = []
+    for i in tqdm(range(height-1)):
+        for j in range(width-1):
+            triangles.append([(j,i), (j+1,i), (j,i+1)])
+            triangles.append([(j+1,i), (j,i+1), (j+1,i+1)])
+    
+    return triangles
+
+
+
+def display_vectorized_image(image, triangles):
+    """
+    Display the image with the vectorized triangles overlayed.
+    """
+    fig, ax = plt.subplots()
+    ax.imshow(image)
+
+    # Plot each triangle
+    for triangle in triangles:
+        polygon = patches.Polygon(triangle, fill=False, edgecolor='black')
+        ax.add_patch(polygon)
+
+    plt.show()
+
+
+
+def adjust_triangles_for_uncarve(triangles, masks):
+    """
+    Adjust triangle vertices based on the reintroduced columns from the uncarve masks.
+    """
+    adjusted_triangles = triangles.copy()
+    
+    # Loop through masks in reversed order
+    for mask in reversed(masks):
+        for triangle in adjusted_triangles:
+            new_triangle = []
+            for vertex in triangle:
+                x, y = vertex
+                
+                # Get the column index of the removed pixel for the current row from the mask
+                pixel_index = np.where(mask[y] == 0)[0][0]
+                
+                # If the vertex's x-coordinate is greater than or equal to pixel_index,
+                # increment it by one
+                if x >= pixel_index:
+                    new_triangle.append((x+1, y))
+                else:
+                    new_triangle.append((x, y))
+            triangle[:] = new_triangle
+
+    return adjusted_triangles
