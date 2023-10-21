@@ -5,6 +5,8 @@ import matplotlib.patches as patches
 from icecream import ic
 from tqdm import tqdm
 import os
+import torch
+import torch.nn.functional as F
 
 
 
@@ -36,7 +38,7 @@ def display_two_images(img1, img2, title1, title2, figsize=(20, 10)):
 
 
 
-def display_combined_cost_map(depth_estimate, inpainted_heatmap, cost_map, weight_depth):
+def display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cost_map, weight_depth):
     """
     Display the combined cost map next to the depth estimate and the inpainted heatmap.
 
@@ -45,28 +47,36 @@ def display_combined_cost_map(depth_estimate, inpainted_heatmap, cost_map, weigh
     - inpainted_heatmap: 2D numpy array or similar representing inpainted heatmap
     - cost_map: 2D numpy array or similar representing combined cost map
     - weight_depth: weight parameter to be used for display title
+    - third_image: 2D numpy array or similar representing the third image to be displayed
     """
     fig = plt.figure(figsize=(20, 10))
-    ax_right = plt.subplot2grid((2, 2), (0, 1), rowspan=2, fig=fig)
-    ax_left_top = plt.subplot2grid((2, 2), (0, 0), fig=fig)
-    ax_left_bottom = plt.subplot2grid((2, 2), (1, 0), fig=fig)
+    ax_right = plt.subplot2grid((3, 2), (0, 1), rowspan=3, fig=fig)
+    ax_left_top = plt.subplot2grid((3, 2), (0, 0), fig=fig)
+    ax_left_middle = plt.subplot2grid((3, 2), (1, 0), fig=fig)
+    ax_left_bottom = plt.subplot2grid((3, 2), (2, 0), fig=fig)
 
     # Depth Estimate with colorbar in top-left
-    im_depth = ax_left_top.imshow(depth_estimate)
-    ax_left_top.set_title("Depth Estimate")
-    cbar_depth = fig.colorbar(im_depth, ax=ax_left_top, orientation='vertical')
+    im_depth = ax_left_bottom.imshow(depth_estimate)
+    ax_left_bottom.set_title("Depth Estimate (MiDaS CNN)")
+    cbar_depth = fig.colorbar(im_depth, ax=ax_left_bottom, orientation='vertical')
     cbar_depth.set_label('Inverse Depth Value', rotation=270, labelpad=15)
 
+    # Third Image with colorbar in middle-left
+    im_third = ax_left_middle.imshow(energy_map)
+    ax_left_middle.set_title("Energy Map (Gradients in x,y)")
+    cbar_third = fig.colorbar(im_third, ax=ax_left_middle, orientation='vertical')
+    cbar_third.set_label('Energy Map Value', rotation=270, labelpad=15)
+
     # Inpainted Heatmap with colorbar in bottom-left
-    im_heatmap = ax_left_bottom.imshow(inpainted_heatmap.squeeze())
-    ax_left_bottom.set_title("Inpainted GradCam Feature Map")
-    cbar_heatmap = fig.colorbar(im_heatmap, ax=ax_left_bottom, orientation='vertical')
+    im_heatmap = ax_left_top.imshow(inpainted_heatmap.squeeze())
+    ax_left_top.set_title("Inpainted GradCam Feature Map (VGG CNN)")
+    cbar_heatmap = fig.colorbar(im_heatmap, ax=ax_left_top, orientation='vertical')
     cbar_heatmap.set_label('Heatmap Value', rotation=270, labelpad=15)
 
     # Combined Cost Map with colorbar on the right, spanning two rows
     im_cost = ax_right.imshow(cost_map)
-    ax_right.set_title(f"Combined Cost Map with depth_weight {weight_depth}")
-    cbar_cost = fig.colorbar(im_cost, ax=ax_right, orientation='vertical', shrink =0.8)
+    ax_right.set_title(f"Combined Cost Map used for Seam Carving")
+    cbar_cost = fig.colorbar(im_cost, ax=ax_right, orientation='vertical', shrink=0.8)
     cbar_cost.set_label('Cost Value', rotation=270, labelpad=15)
 
     plt.tight_layout()
@@ -156,6 +166,8 @@ def modify_features(image, heatmap, image_path, orig_img_shape):
 def get_seam(heatmap):
     r, c = heatmap.shape
 
+    ic(heatmap.shape)
+
     M = heatmap.copy().astype(np.uint32)
     backtrack = np.zeros_like(M, dtype=int)
 
@@ -205,6 +217,40 @@ def carve_column(img, heatmap, M, backtrack):
     img = img[mask_stacked].reshape((r, c - 1, 3))
 
     return mask, img, heatmap_new
+
+
+
+# Inspired by https://karthikkaranth.me/blog/implementing-seam-carving-with-python/
+def calc_energy(img_tensor):
+    # Define the filters
+    filter_du = torch.tensor([
+        [1.0, 2.0, 1.0],
+        [0.0, 0.0, 0.0],
+        [-1.0, -2.0, -1.0]
+    ], dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # shape: [1, 1, 3, 3]
+
+    filter_dv = torch.tensor([
+        [1.0, 0.0, -1.0],
+        [2.0, 0.0, -2.0],
+        [1.0, 0.0, -1.0]
+    ], dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # shape: [1, 1, 3, 3]
+
+    # Expand filters to 3 input channels (R, G, B)
+    filter_du = filter_du.repeat(1, 3, 1, 1)
+    filter_dv = filter_dv.repeat(1, 3, 1, 1)
+
+    # Convolve the image with the filters
+    convolved_du = F.conv2d(img_tensor, filter_du, padding=1)
+    convolved_dv = F.conv2d(img_tensor, filter_dv, padding=1)
+    
+    convolved = torch.abs(convolved_du) + torch.abs(convolved_dv)
+    
+    # Sum the energies in the red, green, and blue channels
+    energy_map = convolved.sum(dim=1, keepdim=True)
+
+    return energy_map
+
+
 
 
 

@@ -6,6 +6,7 @@ from torch.utils import data
 from torchvision.models import vgg19
 from torchvision import transforms
 from torchvision import datasets
+from torchvision import transforms
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import numpy as np
@@ -54,45 +55,48 @@ if __name__ == '__main__':
     orig_image = Image.open(image_path)
     orig_img_cv2 = cv2.imread(image_path)
     orig_img_shape = orig_image.size
-
     # Transform and preprocess the image
     img = torch.FloatTensor(obect_detector.transform(orig_image).unsqueeze(0))
 
     # Generate the Grad-CAM heatmap
     heatmap = obect_detector.grad_cam_heatmap(class_id, img)
-
-
-    # Resize the heatmap to twice the size for better painitng experience
-    heatmap = F.interpolate(heatmap.unsqueeze(0).unsqueeze(0), size=(int(1.5 * heatmap.shape[0]), int(1.5 * heatmap.shape[1])), mode='bilinear', align_corners=False)
-
     # Modify the feature map by painting on it (value range is 0-1)
     inpainted_heatmap = modify_features(img, heatmap.squeeze(), image_path, orig_img_shape)
-
     # Resize the heatmap to the original image size
     inpainted_heatmap = F.interpolate(inpainted_heatmap.unsqueeze(0).unsqueeze(0), size=(orig_img_shape[1], orig_img_shape[0]), mode='bilinear', align_corners=False)
+
+
+    # Calculate energy map for "classic" seam carving based on gradients
+    tensor_transform = transforms.ToTensor()
+    energy_map = calc_energy(tensor_transform(orig_image).unsqueeze(0))
+    energy_map = energy_map.squeeze().detach().cpu().numpy()
+    #Normalize energy map
+    energy_map = (energy_map -energy_map.min())/ (energy_map.max() - energy_map.min() + 1e-8)
+
 
     # Estimate the depth of the image
     print("\nEstimating the depth of the image...")
     depth_estimate = depth_estimator.estimate_depth(image_path)
-
-
-    ## Creating a combined costmap from the inpainted feature map and the depth estimate
-    # Both the inpainted feature map and the depth estimate are in the range 0-1
-
-    # # Convert the heatmap to a numpy array
-    heatmap_inpainted_np = inpainted_heatmap.squeeze().detach().cpu().numpy()
-
     # # Normalize the depth estimate to range 0-1
     depth_estimate = (depth_estimate - depth_estimate.min()) / (depth_estimate.max() - depth_estimate.min()+1e-8)
 
 
+    ## Creating a combined costmap from the inpainted feature map and the depth estimate
+    # Both the inpainted feature map and the depth estimate are in the range 0-1
+    # # Convert the heatmap to a numpy array
+    heatmap_inpainted_np = inpainted_heatmap.squeeze().detach().cpu().numpy()
+
+    # Combine energy map and gradcam map with weighing factor
+    weight_grad = 0.8
+    gradcam_energy_map = weight_grad*heatmap_inpainted_np + (1-weight_grad)* energy_map
+
     # # Create the combined cost map with weighing factor and scale it to 0-255
     # Maximimum (255) can only be reached if the it is of highest gradCam closest to the camera
-    cost_map = ((1-weight_depth)*heatmap_inpainted_np + weight_depth*depth_estimate)*255
+    cost_map = ((1-weight_depth)*gradcam_energy_map +(weight_depth*depth_estimate))*255
 
 
     # Display the combined cost map next to the depth estimate and the inpainted feature map
-    display_combined_cost_map(depth_estimate, inpainted_heatmap, cost_map, weight_depth)
+    display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cost_map, weight_depth)
 
     # Remove n_seams from the image based on costmap and create a video if create_video is True
     img_seam_rm, removed_seams = remove_seams_from_image(orig_img_cv2, cost_map, n_seams, create_video=create_video)
