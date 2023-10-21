@@ -71,15 +71,9 @@ if __name__ == '__main__':
     # Resize the heatmap to the original image size
     inpainted_heatmap = F.interpolate(inpainted_heatmap.unsqueeze(0).unsqueeze(0), size=(orig_img_shape[1], orig_img_shape[0]), mode='bilinear', align_corners=False)
 
-
-
-    ################################################ DEPTH ESTIMATION #############################################################
-
     # Estimate the depth of the image
     print("\nEstimating the depth of the image...")
     depth_estimate = depth_estimator.estimate_depth(image_path)
-
-    ################################################################################################################
 
 
     ## Creating a combined costmap from the inpainted feature map and the depth estimate
@@ -93,100 +87,15 @@ if __name__ == '__main__':
 
 
     # # Create the combined cost map with weighing factor and scale it to 0-255
+    # Maximimum (255) can only be reached if the it is of highest gradCam closest to the camera
     cost_map = ((1-weight_depth)*heatmap_inpainted_np + weight_depth*depth_estimate)*255
 
 
+    # Display the combined cost map next to the depth estimate and the inpainted feature map
+    display_combined_cost_map(depth_estimate, inpainted_heatmap, cost_map, weight_depth)
 
-
-    # # Display the combined cost map next to the depth estimate and the inpainted heatmap
-    # Create main axes: one for left half and one for right half
-    # Create main axes: one for the right half and one for the left half
-    fig = plt.figure(figsize=(20, 10))
-    ax_right = plt.subplot2grid((2, 2), (0, 1), rowspan=2, fig=fig)
-    ax_left_top = plt.subplot2grid((2, 2), (0, 0), fig=fig)
-    ax_left_bottom = plt.subplot2grid((2, 2), (1, 0), fig=fig)
-
-    # Depth Estimate with colorbar in top-left
-    im_depth = ax_left_top.imshow(depth_estimate)
-    ax_left_top.set_title("Depth Estimate")
-    cbar_depth = fig.colorbar(im_depth, ax=ax_left_top, orientation='vertical')
-    cbar_depth.set_label('Inverse Depth Value', rotation=270, labelpad=15)
-
-    # Inpainted Heatmap with colorbar in bottom-left
-    im_heatmap = ax_left_bottom.imshow(inpainted_heatmap.squeeze())
-    ax_left_bottom.set_title("Inpainted GradCam Feature Map")
-    cbar_heatmap = fig.colorbar(im_heatmap, ax=ax_left_bottom, orientation='vertical')
-    cbar_heatmap.set_label('Heatmap Value', rotation=270, labelpad=15)
-
-    # Combined Cost Map with colorbar on the right, spanning two rows
-    im_cost = ax_right.imshow(cost_map)
-    ax_right.set_title(f"Combined Cost Map with depth_weight {weight_depth}")
-    cbar_cost = fig.colorbar(im_cost, ax=ax_right, orientation='vertical', shrink= 0.6)
-    cbar_cost.set_label('Cost Value', rotation=270, labelpad=15)
-
-    plt.tight_layout()
-    plt.show()
-
-
-
-    # Remove the seam from the image
-    img_seam_rm = orig_img_cv2.copy()
-    heatmap_seam_removed = cost_map.copy()
-
-    removed_seams = []
-
-    # Create a tqdm progress bar instance
-    pbar = tqdm(total=n_seams, desc=f"Removing {n_seams} Seams", dynamic_ncols=True, leave=True)
-
-
-    if create_video:
-        # Create a video
-        out = cv2.VideoWriter("video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=3, frameSize=(img_seam_rm.shape[1], img_seam_rm.shape[0]))
-
-
-        # Visualizing the video of seam_carving
-        for i in range(n_seams):
-
-            # Calculate the seam for the current heatmap
-            M, backtrack = get_seam(heatmap_seam_removed)
-
-            # Highlight the current seam on the image
-            highlighted_img = highlight_seam_image(img_seam_rm, M, backtrack)
-
-            # Write the highlighted image to the video
-            img_padded_highlighted = np.zeros((orig_img_cv2.shape[0], orig_img_cv2.shape[1], 3), dtype=int)
-            img_padded_highlighted[:, :highlighted_img.shape[1], :] = highlighted_img
-            out.write(cv2.convertScaleAbs(img_padded_highlighted))
-
-            mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
-
-            removed_seams.append(mask_seam)
-
-            # Update tqdm bar
-            pbar.update(1)
-
-
-        # Close the tqdm progress bar
-        pbar.close()
-        out.release()
-
-
-
-        # No video, just carving
-    else:
-
-        for i in range(n_seams):
-
-            # Calculate the seam for the current heatmap
-            M, backtrack = get_seam(heatmap_seam_removed)
-
-            mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
-  
-            removed_seams.append(mask_seam)
-            pbar.update(1)
-
-
-        pbar.close()
+    # Remove n_seams from the image based on costmap and create a video if create_video is True
+    img_seam_rm, removed_seams = remove_seams_from_image(orig_img_cv2, cost_map, n_seams, create_video=create_video)
 
 
     # Display the original image and the image with the seam removed

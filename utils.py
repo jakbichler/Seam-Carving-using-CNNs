@@ -8,6 +8,8 @@ import os
 
 
 
+
+
 def display_two_images(img1, img2, title1, title2, figsize=(20, 10)):
     """
     Display two images side by side using matplotlib.
@@ -31,6 +33,45 @@ def display_two_images(img1, img2, title1, title2, figsize=(20, 10)):
     plt.title(title2)
     
     plt.show()
+
+
+
+def display_combined_cost_map(depth_estimate, inpainted_heatmap, cost_map, weight_depth):
+    """
+    Display the combined cost map next to the depth estimate and the inpainted heatmap.
+
+    Parameters:
+    - depth_estimate: 2D numpy array or similar representing depth estimate
+    - inpainted_heatmap: 2D numpy array or similar representing inpainted heatmap
+    - cost_map: 2D numpy array or similar representing combined cost map
+    - weight_depth: weight parameter to be used for display title
+    """
+    fig = plt.figure(figsize=(20, 10))
+    ax_right = plt.subplot2grid((2, 2), (0, 1), rowspan=2, fig=fig)
+    ax_left_top = plt.subplot2grid((2, 2), (0, 0), fig=fig)
+    ax_left_bottom = plt.subplot2grid((2, 2), (1, 0), fig=fig)
+
+    # Depth Estimate with colorbar in top-left
+    im_depth = ax_left_top.imshow(depth_estimate)
+    ax_left_top.set_title("Depth Estimate")
+    cbar_depth = fig.colorbar(im_depth, ax=ax_left_top, orientation='vertical')
+    cbar_depth.set_label('Inverse Depth Value', rotation=270, labelpad=15)
+
+    # Inpainted Heatmap with colorbar in bottom-left
+    im_heatmap = ax_left_bottom.imshow(inpainted_heatmap.squeeze())
+    ax_left_bottom.set_title("Inpainted GradCam Feature Map")
+    cbar_heatmap = fig.colorbar(im_heatmap, ax=ax_left_bottom, orientation='vertical')
+    cbar_heatmap.set_label('Heatmap Value', rotation=270, labelpad=15)
+
+    # Combined Cost Map with colorbar on the right, spanning two rows
+    im_cost = ax_right.imshow(cost_map)
+    ax_right.set_title(f"Combined Cost Map with depth_weight {weight_depth}")
+    cbar_cost = fig.colorbar(im_cost, ax=ax_right, orientation='vertical', shrink =0.8)
+    cbar_cost.set_label('Cost Value', rotation=270, labelpad=15)
+
+    plt.tight_layout()
+    plt.show()
+
 
 
 
@@ -165,6 +206,56 @@ def carve_column(img, heatmap, M, backtrack):
 
     return mask, img, heatmap_new
 
+
+
+def remove_seams_from_image(orig_img_cv2, cost_map, n_seams, create_video=False):
+    """
+    Remove seams from the given image.
+
+    Parameters:
+    - orig_img_cv2: Original image
+    - cost_map: Cost map used for seam carving
+    - n_seams: Number of seams to remove
+    - get_seam: Function to calculate seam from the heatmap
+    - carve_column: Function to carve a column from the image and heatmap
+    - create_video (optional): Flag to create a seam carving video
+    """
+    
+    img_seam_rm = orig_img_cv2.copy()
+    heatmap_seam_removed = cost_map.copy()
+
+    removed_seams = []
+
+    pbar = tqdm(total=n_seams, desc=f"Removing {n_seams} Seams", dynamic_ncols=True, leave=True)
+
+    if create_video:
+        out = cv2.VideoWriter("video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=3, frameSize=(img_seam_rm.shape[1], img_seam_rm.shape[0]))
+
+        for i in range(n_seams):
+            M, backtrack = get_seam(heatmap_seam_removed)
+            highlighted_img = highlight_seam_image(img_seam_rm, M, backtrack)
+
+            img_padded_highlighted = np.zeros((orig_img_cv2.shape[0], orig_img_cv2.shape[1], 3), dtype=int)
+            img_padded_highlighted[:, :highlighted_img.shape[1], :] = highlighted_img
+            out.write(cv2.convertScaleAbs(img_padded_highlighted))
+
+            mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
+            removed_seams.append(mask_seam)
+            pbar.update(1)
+
+        pbar.close()
+        out.release()
+
+    else:
+        for i in range(n_seams):
+            M, backtrack = get_seam(heatmap_seam_removed)
+            mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
+            removed_seams.append(mask_seam)
+            pbar.update(1)
+
+        pbar.close()
+
+    return img_seam_rm, removed_seams
 
 
 
