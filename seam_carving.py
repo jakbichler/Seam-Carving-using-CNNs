@@ -30,6 +30,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_seams', type=int, help='Number of seams to remove')
     parser.add_argument('--create_video', action='store_true', help='Whether to create a video or not')
     parser.add_argument('--depth_weight', type=float, help='Weight for the depth estimate', default=0.5)
+    parser.add_argument('--show_steps', action='store_true', help='Whether to show show intermediate steps')
     args = parser.parse_args()
 
     image_path = args.image_path
@@ -37,17 +38,18 @@ if __name__ == '__main__':
     n_seams = args.n_seams
     create_video = args.create_video
     weight_depth = args.depth_weight
+    show_steps = args.show_steps
 
     os.system('clear')
 
     # Initialize the CustomVGG model
-    print("\nInitializing the CustomVGG object detection CNN...")
+    print("Initializing the CustomVGG object detection CNN...")
     obect_detector = CustomVGG()
     obect_detector.eval()
 
 
     # Initialize the MidasDepthEstimator model
-    print("\nInitializing the MidasDepthEstimator CNN...")
+    print("\n--------------------------\nInitializing the MidasDepthEstimator CNN...")
     depth_estimator = MidasDepthEstimator()
 
 
@@ -75,7 +77,7 @@ if __name__ == '__main__':
 
 
     # Estimate the depth of the image
-    print("\nEstimating the depth of the image...")
+    print("--------------------------\nEstimating the depth of the image...\n")
     depth_estimate = depth_estimator.estimate_depth(image_path)
     # # Normalize the depth estimate to range 0-1
     depth_estimate = (depth_estimate - depth_estimate.min()) / (depth_estimate.max() - depth_estimate.min()+1e-8)
@@ -96,34 +98,55 @@ if __name__ == '__main__':
 
 
     # Display the combined cost map next to the depth estimate and the inpainted feature map
-    display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cost_map, weight_depth)
+    if show_steps:
+        display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cost_map, weight_depth)
 
     # Remove n_seams from the image based on costmap and create a video if create_video is True
+    print("--------------------------\nRemoving the seams...")  
     img_seam_rm, removed_seams = remove_seams_from_image(orig_img_cv2, cost_map, n_seams, create_video=create_video)
    
-    # Display the original image and the image with the seam removed
-    display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_seams} seams removed")
-
-
-    # Highlight the missing seams
-    print("\Highlighting the missing seams...")  
-    img_all_seams_highlighted = show_missing_seams(img_seam_rm, removed_seams)
     
-    # # Display carved image and the highlighted image side by side
-    display_two_images(img_seam_rm, img_all_seams_highlighted, "Carved image", "Highlighted removed seams ('Uncarving in pixel domain')")
+    if show_steps:
+        # Display the original image and the image with the seam removed
+        display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_seams} seams removed")
+
+        # Highlight the missing seams
+        print("--------------------------\nHighlighting the missing seams...")  
+        img_all_seams_highlighted = show_missing_seams(img_seam_rm, removed_seams)
+    
+        # # Display carved image and the highlighted image side by side
+        display_two_images(img_seam_rm, img_all_seams_highlighted, "Carved image", "Highlighted removed seams ('Uncarving in pixel domain')")
 
     # Generate the vertices and triangles for the grid (vectorization)
+    print("--------------------------\nGenerating the vertices and triangles for the grid...")
     vertices = generate_vertices(img_seam_rm)
     triangles = generate_triangles(img_seam_rm)
 
+    print("--------------------------\nReinserting the removed seams/Stretching the vector graphic...")  
     # Insert the removed seams by shifting the corresponding vertices
     stretched_vertices = insert_removed_vertices(vertices, removed_seams)
 
-    # Visualize the grid for the original vertices and the stretched one side-by-side
-    visualize_grid(img_seam_rm, vertices, stretched_vertices, triangles)
+    if show_steps:
+    
+        print ("--------------------------\nVisualizing the grid before and after uncarving...")
+        # Visualize the grid for the original vertices and the stretched one side-by-side
+        visualize_grid(img_seam_rm, vertices, stretched_vertices, triangles, n_seams)
+
+        print ("--------------------------\nVisualizing the stretched and colored vector graphics...")
+        visualize_stretched_graphics(img_seam_rm, vertices, stretched_vertices, triangles, grid=False)  
+
+    print ("--------------------------\nInterpolating and Rasterizing the stretched vector graphics...")
+    rastered_image = interpolate_rasterize(orig_img_cv2, vertices, stretched_vertices, triangles)
 
 
+    # Save the rastered final image
+    save_path = "outputs/all_steps_done.png"
+    cv2.imwrite(save_path, cv2.cvtColor(rastered_image, cv2.COLOR_RGB2BGR))
 
+
+    #Display the rastered_image
+    plt.imshow(rastered_image)  
+    plt.show()
 
 
     
