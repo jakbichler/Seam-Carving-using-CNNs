@@ -166,7 +166,6 @@ def modify_features(image, heatmap, image_path, orig_img_shape):
 def get_seam(heatmap):
     r, c = heatmap.shape
 
-    ic(heatmap.shape)
 
     M = heatmap.copy().astype(np.uint32)
     backtrack = np.zeros_like(M, dtype=int)
@@ -221,6 +220,7 @@ def carve_column(img, heatmap, M, backtrack):
 
 
 # Inspired by https://karthikkaranth.me/blog/implementing-seam-carving-with-python/
+# But completelty changes to pytorch functionality
 def calc_energy(img_tensor):
     # Define the filters
     filter_du = torch.tensor([
@@ -350,46 +350,11 @@ def highlight_seam_image(img, M, backtrack):
 
 
 
-def vectorize_with_triangles(image):
-    # Create a blank canvas to draw the triangles
-    canvas = np.zeros_like(image)
-    
-    # Define the triangle-drawing function using OpenCV
-    def draw_triangle(img, pts, color):
-        triangle_cnt = np.array(pts).reshape((-1,1,2))
-        cv2.drawContours(img, [triangle_cnt], 0, color, -1)
 
-    # Iterate through the image pixels in a 2x2 block manner
-    pbar = tqdm(total=(image.shape[1]-1), desc="Vectorizing Image", dynamic_ncols=True, leave=True)
-    for i in range(0, image.shape[1]-1, 2):
-        for j in range(0, image.shape[0]-1, 2):
-            # Centers of the 4 pixels in the block
-            centers = [(i, j), (i, j+1), (i+1, j), (i+1, j+1)]
-            
-            # Define the two triangles using the centers
-            triangle1 = [centers[0], centers[1], centers[2]]
-            triangle2 = [centers[1], centers[2], centers[3]]
-
-            # Get average color for each triangle from the image
-            color1 = np.mean([image[y,x] for x,y in triangle1], axis=0)
-            color2 = np.mean([image[y,x] for x,y in triangle2], axis=0)
-
-            # Draw the triangles onto the canvas
-            draw_triangle(canvas, triangle1, color1)
-            draw_triangle(canvas, triangle2, color2)
-
-        pbar.update(2)
-
-    pbar.close()
-            
-    return canvas
-
-
-
-def uncarve(carved_image, masks, average=False):
+def show_missing_seams(carved_image, masks):
     img = np.array(carved_image)
 
-    pbar = tqdm(total=len(masks), desc="Uncarving Image", dynamic_ncols=True, leave=True)
+    pbar = tqdm(total=len(masks), desc="Highlighting removed seams", dynamic_ncols=True, leave=True)
     
     for mask in reversed(masks):
 
@@ -406,14 +371,7 @@ def uncarve(carved_image, masks, average=False):
             # left and right of the pixel that was removed
             new_img[row, :pixel_index] = img[row, :pixel_index]
             new_img[row, pixel_index+1:] = img[row, pixel_index:]
-            
-            if average:
-                # Average the two neighbouring pixels
-                new_img[row, pixel_index] = np.mean(img[row, pixel_index:pixel_index+2], axis=0)
-            else:
-                new_img[row, pixel_index] = 0  
-
-
+            new_img[row, pixel_index] = 0  
     
         pbar.update(1)
         img = new_img
@@ -422,58 +380,113 @@ def uncarve(carved_image, masks, average=False):
 
     return img
 
-def vectorize(image):
-    height, width = image.shape[:2]
 
-    # Create triangles
+
+def generate_vertices(image):
+    """ 
+    Generate vertices for the image.
+    """
+    height, width = image.shape[:2]
+    y, x = np.mgrid[:height, :width]
+    vertices = np.column_stack((x.ravel(), y.ravel()))
+
+    return vertices
+
+
+
+def generate_triangles(image):
+    """
+    Generate triangles for the image.
+    """
+    height, width = image.shape[:2]
     triangles = []
-    for i in tqdm(range(height-1)):
-        for j in range(width-1):
-            triangles.append([(j,i), (j+1,i), (j,i+1)])
-            triangles.append([(j+1,i), (j,i+1), (j+1,i+1)])
-    
+
+    for y in range(height-1):
+        for x in range(width-1):
+
+            top_left = y * (width ) + x
+            top_right = top_left + 1
+
+            bottom_left = (y + 1) * (width) + x
+            bottom_right = bottom_left + 1
+
+            triangles.append([top_left, top_right, bottom_right])
+            triangles.append([top_left, bottom_right, bottom_left])
+
     return triangles
 
 
 
-def display_vectorized_image(image, triangles):
+def insert_removed_vertices(vertices, removed_seams):
     """
-    Display the image with the vectorized triangles overlayed.
+    Insert the removed seams back into the image, 
+    by shifting vertices of the vecotrized image.
     """
-    fig, ax = plt.subplots()
-    ax.imshow(image)
+    updated_vertices = []
 
-    # Plot each triangle
-    for triangle in triangles:
-        polygon = patches.Polygon(triangle, fill=False, edgecolor='black')
-        ax.add_patch(polygon)
+    # Loop through the removed seams in reversed order
+    for seam in tqdm(reversed(removed_seams), desc="Reintroducing removed seams", unit="seam"):
 
+
+        seam_positions = np.where(seam==False)
+        seam_rows, seam_cols = seam_positions
+
+        # Temporary storage to hold updated vertices for this iteration
+        temp_vertices = []
+
+        for vertex in vertices:
+            col, row = vertex
+            adjusted_col = col
+            
+            # Use zip to iterate over seam rows and columns simultaneously
+            for s_row, s_col in zip(seam_rows, seam_cols):
+                # Only look at vertices on the same row as the current seam row
+                if row == s_row:
+                    # If the vertex's column is to the right of the reintroduced seam, shift it to the right
+                    if col >= s_col:
+                        adjusted_col += 1
+
+            # Append the possibly adjusted vertex to the temporary list
+            temp_vertices.append([adjusted_col, row])
+            
+        # Set vertices to the updated vertices for this iteration
+        vertices = temp_vertices
+    
+    # After processing all seams, set the final list of vertices
+    updated_vertices = vertices
+    
+    return updated_vertices
+
+
+
+def visualize_grid(image, vertices, stretched_vertices, triangles):
+    """
+    Visualize the grid for the original vertices and the stretched one side-by-side.
+    """
+
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+
+
+    for tri in tqdm(triangles, desc = "Plotting triangles", unit = "triangle"):
+        tri_vertices = np.array([vertices[i] for i in tri])
+        tri_vertices_str = np.array([stretched_vertices[i] for i in tri])
+        polygon = patches.Polygon(tri_vertices, fill=None, edgecolor='r', closed=True)
+        polygon_stretched = patches.Polygon(tri_vertices_str, fill=None, edgecolor='r', closed=True)
+        ax1.add_patch(polygon)
+        ax2.add_patch(polygon_stretched)
+    
+        # plot vertices as small dots
+        ax1.plot(tri_vertices[:, 0], tri_vertices[:, 1], 'o', color='b', markersize=1)
+        ax2.plot(tri_vertices_str[:, 0], tri_vertices_str[:, 1], 'o', color='b', markersize=1)
+
+    height, width = image.shape[:2]
+    ax1.set_xlim([-2, width + 1])
+    ax1.set_ylim([height + 2, -1])
+    ax1.imshow(image, aspect='auto')
+    ax2.set_xlim([-2, width + 2])
+    ax2.set_ylim([height + 2, -1])
+    ax2.imshow(image, aspect='auto')
     plt.show()
 
 
-
-def adjust_triangles_for_uncarve(triangles, masks):
-    """
-    Adjust triangle vertices based on the reintroduced columns from the uncarve masks.
-    """
-    adjusted_triangles = triangles.copy()
-    
-    # Loop through masks in reversed order
-    for mask in reversed(masks):
-        for triangle in adjusted_triangles:
-            new_triangle = []
-            for vertex in triangle:
-                x, y = vertex
-                
-                # Get the column index of the removed pixel for the current row from the mask
-                pixel_index = np.where(mask[y] == 0)[0][0]
-                
-                # If the vertex's x-coordinate is greater than or equal to pixel_index,
-                # increment it by one
-                if x >= pixel_index:
-                    new_triangle.append((x+1, y))
-                else:
-                    new_triangle.append((x, y))
-            triangle[:] = new_triangle
-
-    return adjusted_triangles

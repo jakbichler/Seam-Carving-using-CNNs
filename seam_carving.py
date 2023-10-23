@@ -41,13 +41,13 @@ if __name__ == '__main__':
     os.system('clear')
 
     # Initialize the CustomVGG model
-    print("\nInitializing the CustomVGG model...")
+    print("\nInitializing the CustomVGG object detection CNN...")
     obect_detector = CustomVGG()
     obect_detector.eval()
 
 
     # Initialize the MidasDepthEstimator model
-    print("\nInitializing the MidasDepthEstimator model...")
+    print("\nInitializing the MidasDepthEstimator CNN...")
     depth_estimator = MidasDepthEstimator()
 
 
@@ -100,39 +100,29 @@ if __name__ == '__main__':
 
     # Remove n_seams from the image based on costmap and create a video if create_video is True
     img_seam_rm, removed_seams = remove_seams_from_image(orig_img_cv2, cost_map, n_seams, create_video=create_video)
-
-
+   
     # Display the original image and the image with the seam removed
     display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_seams} seams removed")
 
-    # Vectorize the image with triangles
-    print("\nVectorizing the image with triangles...")
-    vectorized_img = vectorize_with_triangles(img_seam_rm)
-    # show the vectorized image and the seam carved image side by side
-    display_two_images(img_seam_rm, vectorized_img, f"Image with {n_seams} seams removed", "Vectorized Image with Triangles")
 
-    # Uncarve the vectorized image without averaging to show gaps
-    print("\nUncarving the vectorized image...")
-    img_all_seams_highlighted = uncarve(vectorized_img, removed_seams, average=False)
-    # Display the vectorized image and the uncarved image side by side
-    display_two_images(vectorized_img, img_all_seams_highlighted, "Vectorized Image with Triangles", "Uncarved Image")
+    # Highlight the missing seams
+    print("\Highlighting the missing seams...")  
+    img_all_seams_highlighted = show_missing_seams(img_seam_rm, removed_seams)
+    
+    # # Display carved image and the highlighted image side by side
+    display_two_images(img_seam_rm, img_all_seams_highlighted, "Carved image", "Highlighted removed seams ('Uncarving in pixel domain')")
+
+    # Generate the vertices and triangles for the grid (vectorization)
+    vertices = generate_vertices(img_seam_rm)
+    triangles = generate_triangles(img_seam_rm)
+
+    # Insert the removed seams by shifting the corresponding vertices
+    stretched_vertices = insert_removed_vertices(vertices, removed_seams)
+
+    # Visualize the grid for the original vertices and the stretched one side-by-side
+    visualize_grid(img_seam_rm, vertices, stretched_vertices, triangles)
 
 
-    # # uncarve with averaging to fill gaps
-    # print("\nUncarving the vectorized image with averaging...")
-    # img_all_seams_highlighted_avg = uncarve(vectorized_img, removed_seams, average=True)
-    # # Display the vectorized image and the uncarved image side by side
-    # display_two_images(vectorized_img, img_all_seams_highlighted_avg, "Vectorized Image with Triangles", "Uncarved Image with Averaging")
-
-
-    ###################################Vectorization approach 2###########################
-
-    # vectorized_triangles = vectorize(img_seam_rm)
-    # display_vectorized_image(img_seam_rm, vectorized_triangles)
-    # adjusted_triangles = adjust_triangles_for_uncarve(vectorized_triangles, removed_seams)
-    # display_vectorized_image(img_all_seams_highlighted, adjusted_triangles)
-
-    ########################################################
 
 
 
