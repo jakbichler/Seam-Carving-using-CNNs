@@ -188,35 +188,7 @@ def get_seam(heatmap):
 
 
 
-
-# # Inspired by https://karthikkaranth.me/blog/implementing-seam-carving-with-python/
-# def carve_column(img, heatmap, M, backtrack):
-#     r, c, _ = img.shape
-
-#     # Create a (r, c) matrix filled with the value True
-#     # We'll be removing all pixels from the image which
-#     # have False later
-#     mask = np.ones((r, c), dtype=bool)
-
-#     # Find the position of the smallest element in the
-#     # last row of M
-#     j = np.argmin(M[-1])
-
-#     for i in reversed(range(r)):
-#         # Mark the pixels for deletion
-#         mask[i, j] = False
-#         j = backtrack[i, j]
-
-#     # Remove seam from heatmap
-#     heatmap_new = heatmap[mask].reshape((r, c - 1))
-
-
-#     # Remove seam from image
-#     mask_stacked = np.stack([mask] * 3, axis=2)
-#     img = img[mask_stacked].reshape((r, c - 1, 3))
-
-#     return mask, img, heatmap_new
-
+# Inspired by https://karthikkaranth.me/blog/implementing-seam-carving-with-python/
 def carve_column(img, heatmap, M, backtrack):
     r, c = img.shape[:2]
 
@@ -321,10 +293,17 @@ def remove_seams_from_image(orig_img_cv2, cost_map, n_cols, n_rows, create_video
                     img_padded_highlighted[:, :highlighted_img.shape[1], :] = highlighted_img
                     out.write(cv2.convertScaleAbs(img_padded_highlighted))
 
+            
+            
             mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
-            removed_seams.append(mask_seam)
+            
+            if remove_horizontal:
+                removed_seams.append(np.flipud(mask_seam.transpose()))
+                
+            else:
+                removed_seams.append((mask_seam))
             pbar.update(1)
-        
+
         pbar.close()
 
         if remove_horizontal:
@@ -423,9 +402,6 @@ def show_missing_rows(carved_image, removed_rows):
     
     for mask in reversed(removed_rows):
 
-        # Flip the mask to get the correct indices
-        mask = np.flipud(mask.transpose())
-
         new_img = np.zeros((img.shape[0] + 1, img.shape[1], img.shape[2]), dtype=img.dtype)
         
         for col in range(mask.shape[1]):
@@ -434,6 +410,7 @@ def show_missing_rows(carved_image, removed_rows):
             # This is the index of the pixel that was removed
             # We will replace this pixel with the average of the two neighbouring pixels
             pixel_index = np.where(mask[:,col] == 0)[0][0]
+
 
             # Where mask is 0, leave the new image to zero, fill the new image with old image 
             # left and right of the pixel that was removed
@@ -529,54 +506,43 @@ def get_triangle_color(triangle_vertices, image):
 
 
 
+def insert_removed_vertices(vertices, removed_rows, removed_cols):
+    """Insert the removed seams back into the image by shifting vertices of the vectorized image."""
 
-def insert_removed_vertices(vertices, removed_seams):
-    """
-    Insert the removed seams back into the image, 
-    by shifting vertices of the vecotrized image.
-    """
-    updated_vertices = []
+    for removed_seams, desc, axis in zip([removed_rows, removed_cols],
+                                         ["Reinserting removed seams vertically", "Reinserting removed seams horizontally"],
+                                         [0, 1]):
 
+        pbar = tqdm(total=len(removed_seams), desc=desc, unit="seam")
 
-    pbar = tqdm(total=len(removed_seams), desc="Reinserting removed seams", unit="seam")
+        for seam in reversed(removed_seams):
+            seam_positions = np.where(seam == False)
+            seam_rows, seam_cols = seam_positions
+            temp_vertices = []
 
-    # Loop through the removed seams in reversed order
-    for seam in reversed(removed_seams):
+            for vertex in vertices:
+                col, row = vertex
+                
+                # Adjusting row
+                if axis == 0:
+                    for s_row, s_col in zip(seam_rows, seam_cols):
+                        if col == s_col and row >= s_row:
+                            row += 1
 
-        seam_positions = np.where(seam==False)
-        seam_rows, seam_cols = seam_positions
+                # Adjusting col
+                if axis == 1:
+                    for s_row, s_col in zip(seam_rows, seam_cols):
+                        if row == s_row and col >= s_col:
+                            col += 1
 
-        # Temporary storage to hold updated vertices for this iteration
-        temp_vertices = []
+                temp_vertices.append([col, row])
 
-        for vertex in vertices:
-            col, row = vertex
-            adjusted_col = col
-            
-            # Use zip to iterate over seam rows and columns simultaneously
-            for s_row, s_col in zip(seam_rows, seam_cols):
-                # Only look at vertices on the same row as the current seam row
-                if row == s_row:
-                    # If the vertex's column is to the right of the reintroduced seam, shift it to the right
-                    if col >= s_col:
-                        adjusted_col += 1
+            vertices = temp_vertices
+            pbar.update(1)
 
-            # Append the possibly adjusted vertex to the temporary list
-            temp_vertices.append([adjusted_col, row])
-            
-        # Set vertices to the updated vertices for this iteration
-        vertices = temp_vertices
+        pbar.close()
 
-        # Update the tqdm progress bar
-        pbar.update(1)
-    
-    # After processing all seams, set the final list of vertices
-    updated_vertices = vertices
-    
-    # Close the tqdm progress bar
-    pbar.close()
-
-    return updated_vertices
+    return vertices
 
 
 

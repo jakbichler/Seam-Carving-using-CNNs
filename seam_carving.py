@@ -112,16 +112,16 @@ if __name__ == '__main__':
     removed_cols = removed_seams[:n_cols]
     removed_rows = removed_seams[n_cols:]
     
+    ic(removed_cols[0])
+    ic(removed_rows[0])
 
     if show_steps:
         # Display the original image and the image with the seam removed
         display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_cols} columns and {n_rows} rows removed")
 
-        # Highlight the missing seams
+        # Highlight the missing seams in rows and columns
         print("--------------------------\nHighlighting the missing seams...")  
-
         img_with_rows = show_missing_rows(img_seam_rm, removed_rows)
-
         img_with_all_seams_highlighted = show_missing_cols(img_with_rows, removed_cols)
 
         # # Display carved image and the highlighted col side by side
@@ -134,8 +134,8 @@ if __name__ == '__main__':
     triangles = generate_triangles(img_seam_rm)
 
     print("--------------------------\nReinserting the removed seams/Stretching the vector graphic...")  
-    # Insert the removed seams by shifting the corresponding vertices
-    stretched_vertices = insert_removed_vertices(vertices, removed_cols)
+    # Insert the removed seams by shifting the corresponding vertices up and right
+    stretched_vertices = insert_removed_vertices(vertices, removed_rows, removed_cols)
 
     if show_steps:
     
