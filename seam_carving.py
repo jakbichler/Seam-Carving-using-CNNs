@@ -27,7 +27,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--image_path', type=str, help='Path to the input image')
     parser.add_argument('--class_id', type=int, help='Class to perform Grad-CAM with')
-    parser.add_argument('--n_seams', type=int, help='Number of seams to remove')
+    parser.add_argument('--n_cols', type=int, help='Number of vertical seams to remove')
+    parser.add_argument('--n_rows', type=int, help='Number of horizontal seams to remove')
     parser.add_argument('--create_video', action='store_true', help='Whether to create a video or not')
     parser.add_argument('--depth_weight', type=float, help='Weight for the depth estimate', default=0.5)
     parser.add_argument('--show_steps', action='store_true', help='Whether to show show intermediate steps')
@@ -35,7 +36,8 @@ if __name__ == '__main__':
 
     image_path = args.image_path
     class_id = args.class_id
-    n_seams = args.n_seams
+    n_cols = args.n_cols
+    n_rows = args.n_rows
     create_video = args.create_video
     weight_depth = args.depth_weight
     show_steps = args.show_steps
@@ -56,6 +58,8 @@ if __name__ == '__main__':
     # Load the image
     orig_image = Image.open(image_path)
     orig_img_cv2 = cv2.imread(image_path)
+
+
     orig_img_shape = orig_image.size
     # Transform and preprocess the image
     img = torch.FloatTensor(obect_detector.transform(orig_image).unsqueeze(0))
@@ -101,21 +105,28 @@ if __name__ == '__main__':
     if show_steps:
         display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cost_map, weight_depth)
 
-    # Remove n_seams from the image based on costmap and create a video if create_video is True
-    print("--------------------------\nRemoving the seams...")  
-    img_seam_rm, removed_seams = remove_seams_from_image(orig_img_cv2, cost_map, n_seams, create_video=create_video)
-   
+    print("--------------------------\nRemoving the seams...")      
+    img_seam_rm, removed_seams, updated_costmap = remove_seams_from_image(orig_img_cv2, cost_map, n_cols, n_rows, create_video=True)
+
+    # Split the removed_seams into vertical and horizontal
+    removed_cols = removed_seams[:n_cols]
+    removed_rows = removed_seams[n_cols:]
     
+
     if show_steps:
         # Display the original image and the image with the seam removed
-        display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_seams} seams removed")
+        display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_cols} columns and {n_rows} rows removed")
 
         # Highlight the missing seams
         print("--------------------------\nHighlighting the missing seams...")  
-        img_all_seams_highlighted = show_missing_seams(img_seam_rm, removed_seams)
-    
-        # # Display carved image and the highlighted image side by side
-        display_two_images(img_seam_rm, img_all_seams_highlighted, "Carved image", "Highlighted removed seams ('Uncarving in pixel domain')")
+
+        img_with_rows = show_missing_rows(img_seam_rm, removed_rows)
+
+        img_with_all_seams_highlighted = show_missing_cols(img_with_rows, removed_cols)
+
+        # # Display carved image and the highlighted col side by side
+        display_two_images(img_seam_rm, img_with_all_seams_highlighted, "Carved image", "Highlighted removed seams ('Uncarving in pixel domain')")
+
 
     # Generate the vertices and triangles for the grid (vectorization)
     print("--------------------------\nGenerating the vertices and triangles for the grid...")
@@ -124,13 +135,13 @@ if __name__ == '__main__':
 
     print("--------------------------\nReinserting the removed seams/Stretching the vector graphic...")  
     # Insert the removed seams by shifting the corresponding vertices
-    stretched_vertices = insert_removed_vertices(vertices, removed_seams)
+    stretched_vertices = insert_removed_vertices(vertices, removed_cols)
 
     if show_steps:
     
         print ("--------------------------\nVisualizing the grid before and after uncarving...")
         # Visualize the grid for the original vertices and the stretched one side-by-side
-        visualize_grid(img_seam_rm, vertices, stretched_vertices, triangles, n_seams)
+        visualize_grid(img_seam_rm, vertices, stretched_vertices, triangles, n_cols)
 
         print ("--------------------------\nVisualizing the stretched and colored vector graphics...")
         visualize_stretched_graphics(img_seam_rm, vertices, stretched_vertices, triangles, grid=False)  
@@ -147,6 +158,3 @@ if __name__ == '__main__':
     #Display the rastered_image
     plt.imshow(rastered_image)  
     plt.show()
-
-
-    

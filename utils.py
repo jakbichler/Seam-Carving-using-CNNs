@@ -189,17 +189,41 @@ def get_seam(heatmap):
 
 
 
-# Inspired by https://karthikkaranth.me/blog/implementing-seam-carving-with-python/
+# # Inspired by https://karthikkaranth.me/blog/implementing-seam-carving-with-python/
+# def carve_column(img, heatmap, M, backtrack):
+#     r, c, _ = img.shape
+
+#     # Create a (r, c) matrix filled with the value True
+#     # We'll be removing all pixels from the image which
+#     # have False later
+#     mask = np.ones((r, c), dtype=bool)
+
+#     # Find the position of the smallest element in the
+#     # last row of M
+#     j = np.argmin(M[-1])
+
+#     for i in reversed(range(r)):
+#         # Mark the pixels for deletion
+#         mask[i, j] = False
+#         j = backtrack[i, j]
+
+#     # Remove seam from heatmap
+#     heatmap_new = heatmap[mask].reshape((r, c - 1))
+
+
+#     # Remove seam from image
+#     mask_stacked = np.stack([mask] * 3, axis=2)
+#     img = img[mask_stacked].reshape((r, c - 1, 3))
+
+#     return mask, img, heatmap_new
+
 def carve_column(img, heatmap, M, backtrack):
-    r, c, _ = img.shape
+    r, c = img.shape[:2]
 
     # Create a (r, c) matrix filled with the value True
-    # We'll be removing all pixels from the image which
-    # have False later
     mask = np.ones((r, c), dtype=bool)
 
-    # Find the position of the smallest element in the
-    # last row of M
+    # Find the position of the smallest element in the last row of M
     j = np.argmin(M[-1])
 
     for i in reversed(range(r)):
@@ -207,20 +231,18 @@ def carve_column(img, heatmap, M, backtrack):
         mask[i, j] = False
         j = backtrack[i, j]
 
-    # Remove seam from heatmap
+    # Since you're removing one column (seam) from the image, 
+    # you need to adjust the mask accordingly for multi-channel images
+    mask_rgb = np.stack([mask] * 3, axis=2)
+
+    # Remove seam from image and heatmap
+    img_new = img[mask_rgb].reshape((r, c - 1, 3))
     heatmap_new = heatmap[mask].reshape((r, c - 1))
 
-
-    # Remove seam from image
-    mask_stacked = np.stack([mask] * 3, axis=2)
-    img = img[mask_stacked].reshape((r, c - 1, 3))
-
-    return mask, img, heatmap_new
-
-
+    return mask, img_new, heatmap_new
 
 # Inspired by https://karthikkaranth.me/blog/implementing-seam-carving-with-python/
-# But completelty changes to pytorch functionality
+# But completelty changed to pytorch functionality
 def calc_energy(img_tensor):
     # Define the filters
     filter_du = torch.tensor([
@@ -252,18 +274,15 @@ def calc_energy(img_tensor):
 
 
 
-
-
-def remove_seams_from_image(orig_img_cv2, cost_map, n_seams, create_video=False):
+def remove_seams_from_image(orig_img_cv2, cost_map, n_cols, n_rows, create_video=False):
     """
-    Remove seams from the given image.
+    Remove seams from the given image both horizontally and vertically.
 
     Parameters:
     - orig_img_cv2: Original image
     - cost_map: Cost map used for seam carving
-    - n_seams: Number of seams to remove
-    - get_seam: Function to calculate seam from the heatmap
-    - carve_column: Function to carve a column from the image and heatmap
+    - n_cols: Number of vertical seams to remove
+    - n_rows: Number of horizontal seams to remove
     - create_video (optional): Flag to create a seam carving video
     """
     
@@ -272,36 +291,51 @@ def remove_seams_from_image(orig_img_cv2, cost_map, n_seams, create_video=False)
 
     removed_seams = []
 
-    pbar = tqdm(total=n_seams, desc=f"Removing {n_seams} Seams", dynamic_ncols=True, leave=True)
-
     if create_video:
-        out = cv2.VideoWriter("outputs/video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=3, frameSize=(img_seam_rm.shape[1], img_seam_rm.shape[0]))
+        out = cv2.VideoWriter("outputs/video_carving.avi", fourcc=cv2.VideoWriter_fourcc(*'MJPG'), fps=3, frameSize=(orig_img_cv2.shape[1], orig_img_cv2.shape[0]))
+    else:
+        out = None
 
-        for i in range(n_seams):
+    for idx, (num_seams, remove_horizontal) in enumerate([(n_cols, False), (n_rows, True)]):
+        if remove_horizontal:
+            # Rotate the image and heatmap by 90 degrees to remove horizontal seams
+            img_seam_rm = cv2.rotate(img_seam_rm, cv2.ROTATE_90_CLOCKWISE)
+            heatmap_seam_removed = cv2.rotate(heatmap_seam_removed, cv2.ROTATE_90_CLOCKWISE)
+
+        pbar = tqdm(total=num_seams, desc=f"Removing {num_seams} {'horizontal' if remove_horizontal else 'vertical'} Seams", dynamic_ncols=True, leave=True)
+        
+        for i in range(num_seams):
             M, backtrack = get_seam(heatmap_seam_removed)
             highlighted_img = highlight_seam_image(img_seam_rm, M, backtrack)
+            
+            if out:
+                if remove_horizontal:
 
-            img_padded_highlighted = np.zeros((orig_img_cv2.shape[0], orig_img_cv2.shape[1], 3), dtype=int)
-            img_padded_highlighted[:, :highlighted_img.shape[1], :] = highlighted_img
-            out.write(cv2.convertScaleAbs(img_padded_highlighted))
+                    img_padded_highlighted = np.zeros((orig_img_cv2.shape[1], orig_img_cv2.shape[0], 3), dtype=int)
+                    img_padded_highlighted[:highlighted_img.shape[0], :highlighted_img.shape[1], :] = highlighted_img
+
+                    out.write(cv2.convertScaleAbs(cv2.rotate(img_padded_highlighted, cv2.ROTATE_90_COUNTERCLOCKWISE)))
+
+                else:
+                    img_padded_highlighted = np.zeros((orig_img_cv2.shape[0], orig_img_cv2.shape[1], 3), dtype=int)
+                    img_padded_highlighted[:, :highlighted_img.shape[1], :] = highlighted_img
+                    out.write(cv2.convertScaleAbs(img_padded_highlighted))
 
             mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
             removed_seams.append(mask_seam)
             pbar.update(1)
-
+        
         pbar.close()
+
+        if remove_horizontal:
+            # Rotate the carved image back by -90 degrees to restore its original orientation
+            img_seam_rm = cv2.rotate(img_seam_rm, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+    if out:
         out.release()
 
-    else:
-        for i in range(n_seams):
-            M, backtrack = get_seam(heatmap_seam_removed)
-            mask_seam, img_seam_rm, heatmap_seam_removed = carve_column(img_seam_rm, heatmap_seam_removed, M, backtrack)
-            removed_seams.append(mask_seam)
-            pbar.update(1)
+    return img_seam_rm, removed_seams, heatmap_seam_removed
 
-        pbar.close()
-
-    return img_seam_rm, removed_seams
 
 
 
@@ -351,7 +385,7 @@ def highlight_seam_image(img, M, backtrack):
 
 
 
-def show_missing_seams(carved_image, masks):
+def show_missing_cols(carved_image, masks):
     img = np.array(carved_image)
 
     pbar = tqdm(total=len(masks), desc="Highlighting removed seams", dynamic_ncols=True, leave=True)
@@ -379,6 +413,41 @@ def show_missing_seams(carved_image, masks):
     pbar.close()
 
     return img
+
+
+
+def show_missing_rows(carved_image, removed_rows):
+    img = np.array(carved_image)
+
+    pbar = tqdm(total=len(removed_rows), desc="Highlighting removed seams", dynamic_ncols=True, leave=True)
+    
+    for mask in reversed(removed_rows):
+
+        # Flip the mask to get the correct indices
+        mask = np.flipud(mask.transpose())
+
+        new_img = np.zeros((img.shape[0] + 1, img.shape[1], img.shape[2]), dtype=img.dtype)
+        
+        for col in range(mask.shape[1]):
+
+            # Find the index where the mask in that row is zero
+            # This is the index of the pixel that was removed
+            # We will replace this pixel with the average of the two neighbouring pixels
+            pixel_index = np.where(mask[:,col] == 0)[0][0]
+
+            # Where mask is 0, leave the new image to zero, fill the new image with old image 
+            # left and right of the pixel that was removed
+            new_img[:pixel_index, col] = img[:pixel_index, col]
+            new_img[pixel_index +1:, col] = img[pixel_index:, col]
+            new_img[pixel_index, col] = 0  
+    
+        pbar.update(1)
+        img = new_img
+
+    pbar.close()
+
+    return img
+
 
 
 
