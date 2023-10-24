@@ -16,14 +16,21 @@ import argparse
 from PIL import Image
 from models.vgg19.vgg import CustomVGG
 from models.midas_depth.model_midas import MidasDepthEstimator
-from utils import *
+from utils.carving_utils import *
+from utils.vectorization_utils import *
+from utils.visualisations_utils import *
+from utils.grad_cam_utils import *
 import os
+
 
 
     
 if __name__ == '__main__':
 
 
+#####################################################################################################
+        ## ARGUMENT PARSING
+#####################################################################################################
     parser = argparse.ArgumentParser()
     parser.add_argument('--image_path', type=str, help='Path to the input image')
     parser.add_argument('--class_id', type=int, help='Class to perform Grad-CAM with')
@@ -44,6 +51,10 @@ if __name__ == '__main__':
 
     os.system('clear')
 
+
+#####################################################################################################
+        ## MODEL INITIALIZATION
+#####################################################################################################
     # Initialize the CustomVGG model
     print("Initializing the CustomVGG object detection CNN...")
     obect_detector = CustomVGG()
@@ -55,6 +66,10 @@ if __name__ == '__main__':
     depth_estimator = MidasDepthEstimator()
 
 
+
+#####################################################################################################
+        ## GRADCAM
+#####################################################################################################
     # Load the image
     orig_image = Image.open(image_path)
     orig_img_cv2 = cv2.imread(image_path)
@@ -72,6 +87,10 @@ if __name__ == '__main__':
     inpainted_heatmap = F.interpolate(inpainted_heatmap.unsqueeze(0).unsqueeze(0), size=(orig_img_shape[1], orig_img_shape[0]), mode='bilinear', align_corners=False)
 
 
+
+#####################################################################################################
+        ## SEAM CARVING (USING GRADCAM, ENERGY AND DEPTH)
+#####################################################################################################
     # Calculate energy map for "classic" seam carving based on gradients
     tensor_transform = transforms.ToTensor()
     energy_map = calc_energy(tensor_transform(orig_image).unsqueeze(0))
@@ -112,8 +131,6 @@ if __name__ == '__main__':
     removed_cols = removed_seams[:n_cols]
     removed_rows = removed_seams[n_cols:]
     
-    ic(removed_cols[0])
-    ic(removed_rows[0])
 
     if show_steps:
         # Display the original image and the image with the seam removed
@@ -127,6 +144,11 @@ if __name__ == '__main__':
         # # Display carved image and the highlighted col side by side
         display_two_images(img_seam_rm, img_with_all_seams_highlighted, "Carved image", "Highlighted removed seams ('Uncarving in pixel domain')")
 
+
+
+#####################################################################################################
+        ## VECTORIZATION
+#####################################################################################################
 
     # Generate the vertices and triangles for the grid (vectorization)
     print("--------------------------\nGenerating the vertices and triangles for the grid...")
@@ -146,6 +168,11 @@ if __name__ == '__main__':
         print ("--------------------------\nVisualizing the stretched and colored vector graphics...")
         visualize_stretched_graphics(img_seam_rm, vertices, stretched_vertices, triangles, grid=False)  
 
+
+
+#####################################################################################################
+        ## RASTERIZATION
+#####################################################################################################
     print ("--------------------------\nInterpolating and Rasterizing the stretched vector graphics...")
     rastered_image = interpolate_rasterize(orig_img_cv2, vertices, stretched_vertices, triangles)
 
