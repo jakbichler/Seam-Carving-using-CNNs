@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from tqdm import tqdm
 
-def display_two_images(img1, img2, title1, title2, figsize=(20, 10)):
+def display_two_images(img1, img2, title1, title2, figsize=(20, 10), save_path = None):
     """
     Display two images side by side using matplotlib.
 
@@ -25,6 +25,10 @@ def display_two_images(img1, img2, title1, title2, figsize=(20, 10)):
     plt.imshow(cv2.cvtColor(cv2.convertScaleAbs(img2), cv2.COLOR_BGR2RGB))
     plt.title(title2)
     
+    # Save the figure
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
     plt.show()
 
 
@@ -52,11 +56,13 @@ def display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cos
     cbar_depth = fig.colorbar(im_depth, ax=ax_left_bottom, orientation='vertical')
     cbar_depth.set_label('Inverse Depth Value', rotation=270, labelpad=15)
 
+
     # Third Image with colorbar in middle-left
     im_third = ax_left_middle.imshow(energy_map)
     ax_left_middle.set_title("Energy Map (Gradients in x,y)")
     cbar_third = fig.colorbar(im_third, ax=ax_left_middle, orientation='vertical')
     cbar_third.set_label('Energy Map Value', rotation=270, labelpad=15)
+
 
     # Inpainted Heatmap with colorbar in bottom-left
     im_heatmap = ax_left_top.imshow(inpainted_heatmap.squeeze())
@@ -64,12 +70,16 @@ def display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cos
     cbar_heatmap = fig.colorbar(im_heatmap, ax=ax_left_top, orientation='vertical')
     cbar_heatmap.set_label('Heatmap Value', rotation=270, labelpad=15)
 
+
     # Combined Cost Map with colorbar on the right, spanning two rows
     im_cost = ax_right.imshow(cost_map)
     ax_right.set_title(f"Combined Cost Map used for Seam Carving")
-    cbar_cost = fig.colorbar(im_cost, ax=ax_right, orientation='vertical', shrink=0.8)
+    cbar_cost = fig.colorbar(im_cost, ax=ax_right, orientation='vertical', shrink=0.58)
     cbar_cost.set_label('Cost Value', rotation=270, labelpad=15)
 
+
+    # Save the plt figure
+    plt.savefig("outputs/combined_cost_map.png", dpi=500, bbox_inches='tight')
     plt.tight_layout()
     plt.show()
 

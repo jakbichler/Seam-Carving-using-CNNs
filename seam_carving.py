@@ -36,18 +36,17 @@ if __name__ == '__main__':
     parser.add_argument('--class_id', type=int, help='Class to perform Grad-CAM with')
     parser.add_argument('--n_cols', type=int, help='Number of vertical seams to remove')
     parser.add_argument('--n_rows', type=int, help='Number of horizontal seams to remove')
-    parser.add_argument('--create_video', action='store_true', help='Whether to create a video or not')
     parser.add_argument('--depth_weight', type=float, help='Weight for the depth estimate', default=0.5)
-    parser.add_argument('--show_steps', action='store_true', help='Whether to show show intermediate steps')
+    parser.add_argument('--show_steps', action='store_true', help='Whether to show and save intermediate steps')
     args = parser.parse_args()
 
     image_path = args.image_path
     class_id = args.class_id
     n_cols = args.n_cols
     n_rows = args.n_rows
-    create_video = args.create_video
     weight_depth = args.depth_weight
     show_steps = args.show_steps
+    create_video = show_steps
 
     os.system('clear')
 
@@ -134,7 +133,7 @@ if __name__ == '__main__':
 
     if show_steps:
         # Display the original image and the image with the seam removed
-        display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_cols} columns and {n_rows} rows removed")
+        display_two_images(orig_img_cv2, img_seam_rm, "Original image", f"Image with {n_cols} columns and {n_rows} rows removed", save_path="outputs/removed_seams.png")
 
         # Highlight the missing seams in rows and columns
         print("--------------------------\nHighlighting the missing seams...")  
@@ -142,7 +141,7 @@ if __name__ == '__main__':
         img_with_all_seams_highlighted = show_missing_cols(img_with_rows, removed_cols)
 
         # # Display carved image and the highlighted col side by side
-        display_two_images(img_seam_rm, img_with_all_seams_highlighted, "Carved image", "Highlighted removed seams ('Uncarving in pixel domain')")
+        display_two_images(img_seam_rm, img_with_all_seams_highlighted, "Carved image", "Highlighted removed seams ('Uncarving in pixel domain')", save_path="outputs/removed_seams_highlighted.png")
 
 
 
@@ -163,10 +162,10 @@ if __name__ == '__main__':
     
         print ("--------------------------\nVisualizing the grid before and after uncarving...")
         # Visualize the grid for the original vertices and the stretched one side-by-side
-        visualize_grid(img_seam_rm, vertices, stretched_vertices, triangles, n_cols)
+        visualize_grid(img_seam_rm, vertices, stretched_vertices, triangles, n_cols, save_path="outputs/grids.png")
 
         print ("--------------------------\nVisualizing the stretched and colored vector graphics...")
-        visualize_stretched_graphics(img_seam_rm, vertices, stretched_vertices, triangles, grid=False)  
+        visualize_stretched_graphics(img_seam_rm, vertices, stretched_vertices, triangles, grid=False, save_path="outputs/stretched_graphics.png")  
 
 
 
@@ -178,7 +177,7 @@ if __name__ == '__main__':
 
 
     # Save the rastered final image
-    save_path = "outputs/all_steps_done.png"
+    save_path = "outputs/final_image.png"
     cv2.imwrite(save_path, cv2.cvtColor(rastered_image, cv2.COLOR_RGB2BGR))
 
 

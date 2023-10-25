@@ -124,7 +124,10 @@ def insert_removed_vertices(vertices, removed_rows, removed_cols):
 
 
 
-def visualize_grid(image, vertices, stretched_vertices, triangles, n_seams):
+
+
+
+def visualize_grid(image, vertices, stretched_vertices, triangles, n_seams, save_path=None):
     """
     Visualize the grid for the original vertices and the stretched one side-by-side.
     """
@@ -147,19 +150,20 @@ def visualize_grid(image, vertices, stretched_vertices, triangles, n_seams):
 
     height, width = image.shape[:2]
     ax1.set_title("Original")
-    ax1.set_xlim([-2, width + 1])
+    ax1.set_xlim([-1, width + 1])
     ax1.set_ylim([height + 2, -1])
     ax1.imshow(image, aspect='auto')
     ax2.set_title("Stretched")
-    ax2.set_xlim([-2, width + 2 + n_seams])
+    ax2.set_xlim([-1, width + 1 + n_seams])
     ax2.set_ylim([height + 2, -1])
     ax2.imshow(image, aspect='auto')
+
     plt.show()
 
 
 
 
-def visualize_stretched_graphics(image, vertices, stretched_vertices, triangles, grid=False):
+def visualize_stretched_graphics(image, vertices, stretched_vertices, triangles, grid=False, save_path=None):
     """
     Visualize the grid for the stretched vector graphics with triangles filled with their respective color.
     """
@@ -193,6 +197,8 @@ def visualize_stretched_graphics(image, vertices, stretched_vertices, triangles,
     ax.set_xlim([-2, width + 2])
     ax.set_ylim([height + 2, -1])
     plt.axis('off')  # To hide axis
+
+
     plt.show()
 
 

@@ -92,7 +92,6 @@ class CustomVGG(nn.Module):
             
         # average the channels of the activations
         heatmap = torch.mean(activations, dim=1).squeeze()
-        ic(heatmap.shape    )
         # relu on top of the heatmap
         heatmap = np.maximum(heatmap, 0)
 
