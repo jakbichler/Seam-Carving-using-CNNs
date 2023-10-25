@@ -13,7 +13,7 @@ This repository is the submission for the final assignment of the course **Appli
 
 ## Table of Contents
 
-1.  [About the Project](#atp) 
+1. [About the Project](#atp) 
 
 2. [Setting up the project in a new virtual environment](#setup)
 
@@ -24,17 +24,17 @@ This repository is the submission for the final assignment of the course **Appli
 5. [Links to algorithmic steps](#as)
 
 
-## Setting up the project in a new virtual environment [LINUX]<a name="setup"></a>
+## 2. Setting up the project in a new virtual environment [LINUX]<a name="setup"></a>
 
 Follow these steps to set up the project on a Linux machine in a new Python virtual environment:
 
-### 1.  (Optional) Install the `python3.8-venv` package
+### 2.1.  (Optional) Install the `python3.8-venv` package
 If you don't have the `python3.8-venv` package installed, you can install it using:
 
 ```
 sudo apt install python3.8-venv
 ```
-### 2. Create a new virtual environment
+### 2.2. Create a new virtual environment
 Navigate to the directory where you'd like to set up your virtual environment and run:
 
 ```
@@ -43,14 +43,14 @@ python3.8 -m venv myenv
 
 This command will create a new virtual environment named myenv. You can replace myenv with any name you prefer.
 
-### 3. Activate the virtual environment
+### 2.3. Activate the virtual environment
 
 ```
 source myenv/bin/activate
 ```
 After running this command, your terminal prompt should change to indicate that the virtual environment is active.
 
-### 4. Clone the repository
+### 2.4. Clone the repository
 ```
 git clone git@gitlab.ewi.tudelft.nl:cgv/cs4365/student-repositories/2023-2024/cs436523jbichler.git
 ```
@@ -58,7 +58,7 @@ git clone git@gitlab.ewi.tudelft.nl:cgv/cs4365/student-repositories/2023-2024/cs
 cd cs436523jbichler
 ```
 
-### 5. Install the required packages
+### 2.5. Install the required packages
 
 With your virtual environment activated, install the necessary packages using:
 ```
@@ -66,7 +66,7 @@ pip install -r requirements.txt
 ```
 Now, your project is set up and ready to run in a fresh virtual environment.
 
-## Usage <a name="u"></a>
+## 3. Usage <a name="u"></a>
 
 To run the `seam_carving.py` script, you can use the following command:
 
