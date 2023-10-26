@@ -7,7 +7,9 @@
 
 This repository is the submission for the final assignment of the course **Applied Image Processing, "Seam-Carved Vectorization"**.
 
-
+<img src="animations/lion_carving.gif" style="height: 200px; margin-right: 20px;">
+<img src="animations/scorpion_carving.gif" style="height: 200px; margin-right: 20px;">
+<img src="animations/canoe_carving.gif" style="height: 200px;">
 
 --- 
 
@@ -94,7 +96,7 @@ python3 seam_carving.py --image_path IMAGE_PATH --class_id CLASS_ID --n_cols N_C
 
 -- show_steps: (Optional) Flag. If provided, the script will show and save intermediate steps. There's no need to provide a value for this flag. It will save intermediate output images and create a video displaying the steps of seam carving. 
 
-NOTE: that this will slow down the script, especially when the vectorized (stretched) triangles are plotted.  
+NOTE: that this will slow down the script, especially when the vectorized (stretched) triangles are plotted. If you want to run the script quickly, don't use this flag. 
 
 
 
@@ -157,9 +159,6 @@ Four sample images and their smaller versions (quicker runtime and debugging) ar
     ├── grad_cam_utils.py
     ├── vectorization_utils.py
     └── visualisations_utils.py
-
-
-
 ```
 
 
