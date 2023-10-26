@@ -38,15 +38,19 @@ sudo apt install python3.8-venv
 Navigate to the directory where you'd like to set up your virtual environment and run:
 
 ```
-python3.8 -m venv myenv
+python3.8 -m venv aip_env
 ```
 
-This command will create a new virtual environment named myenv. You can replace myenv with any name you prefer.
+This command will create a new virtual environment named aip_env. You can **replace ``aip_env`` with any name you prefer**.
 
 ### 2.3. Activate the virtual environment
 
 ```
-source myenv/bin/activate
+cd aip_env
+```
+
+```
+source bin/activate
 ```
 After running this command, your terminal prompt should change to indicate that the virtual environment is active.
 
