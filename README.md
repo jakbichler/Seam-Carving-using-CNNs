@@ -20,10 +20,12 @@ This repository is the submission for the final assignment of the course **Appli
 2. [Setting up the project in a new virtual environment](#setup)
 
 3. [Usage](#u)
-    
-4. [File Structure](#fs)
 
-5. [Links to algorithmic steps](#as)
+4. [Links to algorithmic steps](#as)
+    
+5. [File Structure](#fs)
+
+
 
 
 ## 2. Setting up the project in a new virtual environment [LINUX]<a name="setup"></a>
@@ -120,10 +122,106 @@ Four sample images and their smaller versions (quicker runtime and debugging) ar
 
 
 
+### 4. Links to algorithmic steps<a name="as"></a>
 
-### 4. File structure <a name="fs"></a>
+#### Basic features
+
+1. Load an RGB image from disk
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L71-72)
+
+2. Run a pretrained CNN for image detection
+
+    [Definition in models/vgg/vgg.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/models/vgg19/vgg.py?ref_type=heads#L56-66)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L86)
+
+
+3. Extract a feature map from a CNN using Grad-Cam
+
+    [Definition in models/vgg/vgg.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/models/vgg19/vgg.py?ref_type=heads#L70-103)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L86)
+
+4. Modify the feature map by painting
+
+    [Definition in utils/grad_cam_utils.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/utils/grad_cam_utils.py?ref_type=heads#L36-117)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L88)
+
+5. Use the map as a guide for seam carving and remove pixel columns with low values
+
+    [Definition in utils/carving_utils.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/utils/carving_utils.py?ref_type=heads#L9-192)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L130)
+
+
+    NOTE: The provided link uses a combined costmap considering the Grad-Cam features, estimated depth from second CNN and the energy map that is usually used for seam carving (gradients in x,y). It then also removes rows instead of only columns to enable resizing in height and width.
+
+6. Vectorize the remaining pixels by replacing them by triangle pairs
+
+
+    [Definition in utils/vectorization_utils.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/utils/vectorization_utils.py?ref_type=heads#L11-64)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L157-159)
+
+7. Move the vectors back to their original positions by "uncarving" 
+
+    [Definition in utils/vectorization_utils.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/utils/vectorization_utils.py?ref_type=heads#L136-183)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L163)
+
+    Note: This already includes uncarving removed vertical and horizontal seams. 
+
+8. Smoothly interpolate the colors in the stretched vector graphics and rasterize it back 
+
+    [Definition in utils/vectorization_utils.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/utils/vectorization_utils.py?ref_type=heads#L327-379)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L180)
+
+9. Save and display the result
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L185-190)
+
+#### Extended features
+
+1. Visualize the steps of carving
+
+    1.1 In the video (see GIFS in this README) 
+
+    [Definition in utils/carving_utils.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/utils/carving_utils.py?ref_type=heads#L158-169)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L130)
+
+    NOTE: when flag ``out`` is set (by setting ``show_steps`` from the command line) then the video is created when removing the seams. 
+
+    1.2 In a static image, all removed pixels are highlighted
+    
+    [Definition in utils/visualisation_utils.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/utils/visualisations_utils.py?ref_type=heads#L88-167)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L143-147)
+
+2. Add another CNN with features conditioned on a different type of user input
+    
+    [Definition in models/midas_depth/model_midas.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/models/midas_depth/model_midas.py?ref_type=heads#L8-53)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L107)
+
+    NOTE: The MiDaS depth estimator CNN is used here. It outputs a feature map that is then combined with both the inpainted feature map from Grad-Cam as well as the energy map from gradients in x.z to guide the seam carving algorithm. It performs monocular depth estimation. Objects that are closer to the camera, have a higher cost to seam carve through.
+
+3. Devise a strategy for orientation of triangle diagonals 
+
+    [Definition in utils/vectorization_utils.py](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/utils/vectorization_utils.py?ref_type=heads#L68-100)
+
+    [Call in main script](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler/-/blob/main/seam_carving.py?ref_type=heads#L158)
+
+    NOTE: The triangle diagonals are chosen based on the cost map of the carved image that takes into 
+    account grad_cam, depth, and energy map (gradients). The function evaluates which diagonal orientation has the lowest cumulative cost and chooses that orientation for the triangle in the output mesh. 
+
+
+
+### 3. File structure <a name="fs"></a>
 ```
-
 ├── data
 │   └── images                      # Example images, can be extended
 │       ├── canoe.jpg
@@ -162,7 +260,6 @@ Four sample images and their smaller versions (quicker runtime and debugging) ar
 ```
 
 
-### 5. Links to algorithmic steps<a name="as"></a>
 
 
 
