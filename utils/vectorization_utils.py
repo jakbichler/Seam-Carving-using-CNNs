@@ -3,12 +3,20 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import matplotlib.patches as patches
 from tqdm import tqdm
+from utils.carving_utils import calc_energy
+from torchvision import transforms
 
 
 
 def generate_vertices(image):
     """ 
     Generate vertices for the image.
+
+    Args:
+    - image (numpy.array): Input image.
+
+    Returns:
+    - vertices (numpy.array): List of vertices of the vectorized image.
     """
     height, width = image.shape[:2]
     y, x = np.mgrid[:height, :width]
@@ -18,37 +26,78 @@ def generate_vertices(image):
 
 
 
-def generate_triangles(image):
+
+def generate_triangles(image, orientation_mesh):
     """
-    Generate triangles for the image along with their interpolated colors.
+    Generate triangles for the image along with their interpolated colors based on orientation mesh.
+
+    Args:
+    - image (numpy.array): Input image.
+    - orientation_mesh (numpy.array): A mesh indicating triangle orientation using '\' or '/'.
+    
+    Returns:
+    - triangles (list): List of generated triangles.
     """
+
     height, width = image.shape[:2]
     triangles = []
-    triangle_colors = {}
 
     for y in range(height-1):
         for x in range(width-1):
-
+            
+            # Get the indices of the four vertices of the current square
             top_left = y * width + x
             top_right = top_left + 1
             bottom_left = (y + 1) * width + x
             bottom_right = bottom_left + 1
 
-            triangle1 = [top_left, top_right, bottom_right]
-            triangle2 = [top_left, bottom_right, bottom_left]
+            # Get the orientation of the current square and assign the triangles accordingly
+            if orientation_mesh[y, x] == '/':
+                triangle1 = [top_left, top_right, bottom_left]
+                triangle2 = [top_right, bottom_right, bottom_left]
+            else:  # '\'
+                triangle1 = [top_left, top_right, bottom_right]
+                triangle2 = [top_left, bottom_right, bottom_left]
 
-            # Get vertices of the triangles in (x, y) format
-            vertices1 = [(x, y), (x + 1, y), (x + 1, y + 1)]
-            vertices2 = [(x, y), (x + 1, y + 1), (x, y + 1)]
-
-
-            # Store triangles and their colors
             triangles.extend([triangle1, triangle2])
-
-
 
     return triangles
 
+
+
+def choose_diagonals(costmap):
+    """
+    Generate a triangle mesh by choosing diagonal orientations 
+    based on the cost map of the carved image that takes into 
+    account grad_cam, depth, and energy map (gradients).
+
+    Args:
+    - costmap (numpy.array): Input cost map.
+
+    Returns:
+    - mesh (numpy.array): A mesh indicating triangle orientation using '\' or '/'.
+    """
+
+    def diagonal_choice(energy_map, i, j):
+        """Inner function to decide the orientation for a given pixel."""
+        if i+1 >= energy_map.shape[0] or j+1 >= energy_map.shape[1]:
+            return '\\'
+        
+        energy_slash = energy_map[i, j+1] + energy_map[i+1, j]
+        energy_backslash = energy_map[i, j] + energy_map[i+1, j+1]
+
+        return '/' if energy_slash < energy_backslash else '\\'
+
+    # Create a mesh with the same dimensions as the cost map
+    r, c = costmap.shape
+    mesh = np.empty((r-1, c-1), dtype=str)
+
+    # Populate the mesh with diagonal orientations
+    for i in range(r-1):
+        for j in range(c-1):
+            mesh[i, j] = diagonal_choice(costmap, i, j)
+    
+    return mesh
 
 
 
@@ -85,7 +134,16 @@ def get_triangle_color(triangle_vertices, image):
 
 
 def insert_removed_vertices(vertices, removed_rows, removed_cols):
-    """Insert the removed seams back into the image by shifting vertices of the vectorized image."""
+    """Insert the removed seams back into the image by shifting vertices of the vectorized image.
+    
+    Parameters:
+    - vertices: List of vertices of the vectorized image.
+    - removed_rows: List of removed rows.
+    - removed_cols: List of removed columns.
+
+    Returns:
+    - vertices: List of vertices of the stretched vectorized image.
+    """
 
     for removed_seams, desc, axis in zip([removed_rows, removed_cols],
                                          ["Reinserting removed seams vertically", "Reinserting removed seams horizontally"],
@@ -93,11 +151,13 @@ def insert_removed_vertices(vertices, removed_rows, removed_cols):
 
         pbar = tqdm(total=len(removed_seams), desc=desc, unit="seam")
 
+        # Sort the removed seams by their position
         for seam in reversed(removed_seams):
             seam_positions = np.where(seam == False)
             seam_rows, seam_cols = seam_positions
             temp_vertices = []
 
+            # Adjust the vertices
             for vertex in vertices:
                 col, row = vertex
                 
@@ -130,12 +190,23 @@ def insert_removed_vertices(vertices, removed_rows, removed_cols):
 def visualize_grid(image, vertices, stretched_vertices, triangles, n_seams, save_path=None):
     """
     Visualize the grid for the original vertices and the stretched one side-by-side.
+
+    Parameters:
+    - image: Input image
+    - vertices: List of vertices of the vectorized image.
+    - stretched_vertices: List of vertices of the stretched vectorized image.
+    - triangles: List of triangles of the vectorized image.
+    - n_seams: Number of seams removed.
+    - save_path (optional): Path to save the plot.
+
+    Returns:
+    - None
     """
 
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
-
+    # plot triangles
     for tri in tqdm(triangles, desc = "Plotting triangles", unit = "triangle"):
         tri_vertices = np.array([vertices[i] for i in tri])
         tri_vertices_str = np.array([stretched_vertices[i] for i in tri])
@@ -148,12 +219,13 @@ def visualize_grid(image, vertices, stretched_vertices, triangles, n_seams, save
         ax1.plot(tri_vertices[:, 0], tri_vertices[:, 1], 'o', color='b', markersize=1)
         ax2.plot(tri_vertices_str[:, 0], tri_vertices_str[:, 1], 'o', color='b', markersize=1)
 
+    # plot image
     height, width = image.shape[:2]
-    ax1.set_title("Original")
+    ax1.set_title("Original vectorized triangles")
     ax1.set_xlim([-1, width + 1])
     ax1.set_ylim([height + 2, -1])
     ax1.imshow(image, aspect='auto')
-    ax2.set_title("Stretched")
+    ax2.set_title("Stretched vectorized triangles")
     ax2.set_xlim([-1, width + 1 + n_seams])
     ax2.set_ylim([height + 2, -1])
     ax2.imshow(image, aspect='auto')
@@ -166,10 +238,21 @@ def visualize_grid(image, vertices, stretched_vertices, triangles, n_seams, save
 def visualize_stretched_graphics(image, vertices, stretched_vertices, triangles, grid=False, save_path=None):
     """
     Visualize the grid for the stretched vector graphics with triangles filled with their respective color.
+
+    Parameters:
+    - image: Input image
+    - vertices: List of vertices of the vectorized image.
+    - stretched_vertices: List of vertices of the stretched vectorized image.
+    - triangles: List of triangles of the vectorized image.
+    - grid (optional): Flag to show the grid.
+    - save_path (optional): Path to save the plot.
+
+    Returns:
+    - None
     """
     fig, ax = plt.subplots(figsize=(6, 6))
 
-
+    # Plot triangles
     for tri in tqdm(triangles, desc="Plotting colored and stretched triangles", unit="triangle"):
         tri_vertices_original = np.array([vertices[i] for i in tri])
         tri_vertices_stretched = np.array([stretched_vertices[i] for i in tri])
@@ -191,7 +274,7 @@ def visualize_stretched_graphics(image, vertices, stretched_vertices, triangles,
             ax.add_patch(polygon_stretched)
 
 
-
+    # Plot image
     height, width = image.shape[:2]
     ax.set_title("Stretched Vector Graphics")
     ax.set_xlim([-2, width + 2])
@@ -206,6 +289,19 @@ def visualize_stretched_graphics(image, vertices, stretched_vertices, triangles,
 
 
 def barycentric(p, a, b, c):
+    """
+    Compute the barycentric coordinates of point p with respect to triangle (a, b, c).
+
+    Parameters:
+    - p: Point
+    - a: First vertex of the triangle
+    - b: Second vertex of the triangle
+    - c: Third vertex of the triangle
+
+    Returns:
+    - u, v, w: Barycentric coordinates of point p with respect to triangle (a, b, c)
+    """
+
     a = np.array(a)
     b = np.array(b)
     c = np.array(c)
@@ -229,6 +325,18 @@ def barycentric(p, a, b, c):
 
 
 def rasterize(src_img, dst_img, src_tri, dst_tri):
+    """
+    Rasterize the triangle with vertices src_tri from the source image to the destination image.
+
+    Parameters:
+    - src_img: Source image
+    - dst_img: Destination image
+    - src_tri: Triangle in the source image
+    - dst_tri: Triangle in the destination image
+
+    Returns:
+    - None
+    """
     h, w, _ = dst_img.shape
 
     # Compute bounding box 
@@ -247,9 +355,20 @@ def rasterize(src_img, dst_img, src_tri, dst_tri):
 
 
 def interpolate_rasterize(src_img, vertices, stretched_vertices, triangles):
+    """
+    Interpolate and rasterize the triangles.
+
+    Parameters:
+    - src_img: Source image
+    - vertices: List of vertices of the vectorized image.
+    - stretched_vertices: List of vertices of the stretched vectorized image.
+    - triangles: List of triangles of the vectorized image.
+
+
+    Returns:
+    - dst_img: Destination image
+    """
     dst_img = np.zeros_like(src_img)
-
-
 
     for tri in tqdm(triangles, desc="Interpolating and rasterizing triangles", unit="triangle"):
         src_tri = [vertices[i] for i in tri]

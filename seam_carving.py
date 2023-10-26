@@ -23,7 +23,6 @@ from utils.grad_cam_utils import *
 import os
 
 
-    
 if __name__ == '__main__':
 
 
@@ -73,6 +72,12 @@ if __name__ == '__main__':
     orig_img_cv2 = cv2.imread(image_path)
 
 
+    # Save the original image
+    save_path = "outputs/original_image.png"
+    cv2.imwrite(save_path, orig_img_cv2)
+
+
+
     orig_img_shape = orig_image.size
     # Transform and preprocess the image
     img = torch.FloatTensor(obect_detector.transform(orig_image).unsqueeze(0))
@@ -119,8 +124,7 @@ if __name__ == '__main__':
 
 
     # Display the combined cost map next to the depth estimate and the inpainted feature map
-    if show_steps:
-        display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cost_map, weight_depth)
+    display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cost_map, weight_depth)
 
     print("--------------------------\nRemoving the seams...")      
     img_seam_rm, removed_seams, updated_costmap = remove_seams_from_image(orig_img_cv2, cost_map, n_cols, n_rows, create_video=True)
@@ -151,7 +155,8 @@ if __name__ == '__main__':
     # Generate the vertices and triangles for the grid (vectorization)
     print("--------------------------\nGenerating the vertices and triangles for the grid...")
     vertices = generate_vertices(img_seam_rm)
-    triangles = generate_triangles(img_seam_rm)
+    diag_orientations = choose_diagonals(updated_costmap)
+    triangles = generate_triangles(img_seam_rm, diag_orientations)
 
     print("--------------------------\nReinserting the removed seams/Stretching the vector graphic...")  
     # Insert the removed seams by shifting the corresponding vertices up and right

@@ -86,6 +86,16 @@ def display_combined_cost_map(depth_estimate, inpainted_heatmap, energy_map, cos
 
 
 def show_missing_cols(carved_image, masks):
+    """
+    Highlight the removed vertical seams in the given image.
+
+    Parameters:
+    - carved_image: Image from which the seams were removed
+    - masks: List of masks representing the removed seams
+
+    Returns:
+    - img: Image with the removed seams highlighted
+    """
     img = np.array(carved_image)
 
     pbar = tqdm(total=len(masks), desc="Highlighting removed seams", dynamic_ncols=True, leave=True)
@@ -116,6 +126,17 @@ def show_missing_cols(carved_image, masks):
 
 
 def show_missing_rows(carved_image, removed_rows):
+    """
+    Highlight the removed horizontal seams in the given image.
+
+    Parameters:
+    - carved_image: Image from which the seams were removed
+    - masks: List of masks representing the removed seams
+
+    Returns:
+    - img: Image with the removed seams highlighted
+    """
+
     img = np.array(carved_image)
 
     pbar = tqdm(total=len(removed_rows), desc="Highlighting removed seams", dynamic_ncols=True, leave=True)

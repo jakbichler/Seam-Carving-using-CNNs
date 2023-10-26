@@ -78,7 +78,9 @@ To run the `seam_carving.py` script, you can use the following command:
 python3 seam_carving.py --image_path IMAGE_PATH --class_id CLASS_ID --n_cols N_COLS --n_rows N_ROWS --depth_weight DEPTH_WEIGHT [--show_steps]
 ```
 
-Arguments:
+### 3.1. Arguments
+
+
 
 -- image_path: Path to the input image. For example: "data/images/lion.jpg".
 
@@ -90,7 +92,9 @@ Arguments:
 
 -- depth_weight: Weight for the depth estimate in the combination of inpainted heatmap from Gradcam, gradient energy and depth estimation
 
--- show_steps: (Optional) Flag. If provided, the script will show and save intermediate steps. There's no need to provide a value for this flag. It will save intermediate output images and create a video displaying the steps of seam carving
+-- show_steps: (Optional) Flag. If provided, the script will show and save intermediate steps. There's no need to provide a value for this flag. It will save intermediate output images and create a video displaying the steps of seam carving. 
+
+NOTE: that this will slow down the script, especially when the vectorized (stretched) triangles are plotted.  
 
 
 
@@ -99,10 +103,64 @@ Example:
 python3 seam_carving.py --image_path "data/images/lion.jpg" --class_id 291 --n_cols 3 --n_rows 3  --depth_weight 0.3 --show_steps
 ```
 
+### 3.2. Inputs
+The script can run on any ``.jpg`` image that you download to the ``data/images`` directory.
 
-The script can run on any ``.jpg`` image that you download to the ``data/images`` directory. I provided some sample images like lion, scorpion and cat_dog 
+Four sample images and their smaller versions (quicker runtime and debugging) are provided:
+
+- ``lion.jpg`` and ``lion_small.jpg`` with corresponding ``class_id 291`` for lion
+
+- ``canoe.jpg`` and ``canoe_small.jpg`` with corresponding ``class_id 472`` for canoe
+
+- ``cat_dog.jpg`` and ``cat_dog_small.jpg`` with corresponding ``class_id 283`` for Persian cat 
+
+- ``scorpion.jpg`` and ``scorpion_small.jpg`` with corresponding ``class_id 71`` for scorpion 
+
+
+
 
 ### 4. File structure <a name="fs"></a>
+```
+
+├── data
+│   └── images                      # Example images, can be extended
+│       ├── canoe.jpg
+│       ├── canoe_small.jpg
+│       ├── cat_dog.jpg
+│       ├── cat_dog_small.jpg
+│       ├── lion.jpg
+│       ├── lion_small.jpg
+│       ├── scorpion.jpg
+│       └── scorpion_small.jpg
+├── models
+│   ├── midas_depth                 # Depth estimation CNN
+│   │   ├── model_midas.py
+│   ├── resnet                      # Resnet image classifier, not used in final solution
+│   │   ├── 91class.names
+│   │   └── resnet.py
+│   ├── vgg19                       # VGG image classifier
+│   │   └── vgg.py
+│   ├── yolov3                      # Yolo v3 object detecion, not used in final solution
+│   │   ├── class.names
+│   │   ├── yolo_dnn.py
+│   │   ├── yolov3.cfg
+│   │   └── yolov3.weights
+│   └── yolov8                      # Yolo v8 object detecion, not used in final solution
+│       ├── yolo_ultra.py
+│       └── yolov8m.pt
+├── outputs                         # Directory for generated outputs
+├── README.md
+├── requirements.txt                
+├── seam_carving.py                 # Main script
+└── utils                           # Utility functions
+    ├── carving_utils.py
+    ├── grad_cam_utils.py
+    ├── vectorization_utils.py
+    └── visualisations_utils.py
+
+
+
+```
 
 
 ### 5. Links to algorithmic steps<a name="as"></a>
