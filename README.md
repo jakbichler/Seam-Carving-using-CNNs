@@ -3,9 +3,12 @@
  **Course:**  Applied Image Processing (CS4365) \
  **Program:** Msc Robotics @ TU Delft            
  **Developer:**    Jakob Bichler    
- **Student ID** 5856795     
+ **Student ID** 5856795  
+ **GitLab Repo** [Click to go to GitLab](https://gitlab.ewi.tudelft.nl/cgv/cs4365/student-repositories/2023-2024/cs436523jbichler)   
 
 This repository is the submission for the final assignment of the course **Applied Image Processing, "Seam-Carved Vectorization"**.
+
+For further (visual) explanations on how the algorithm works, see the [Report](aip_final_report_bichler.pdf).
 
 <img src="animations/lion_carving.gif" style="height: 200px; margin-right: 20px;">
 <img src="animations/scorpion_carving.gif" style="height: 200px; margin-right: 20px;">
